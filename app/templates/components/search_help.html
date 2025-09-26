@@ -1,0 +1,74 @@
+<div class="search-help">
+    <details>
+        <summary>Search Help & Examples</summary>
+        <div class="help-content">
+            <h4>Search Modes:</h4>
+            <ul>
+                <li><strong>Simple Search:</strong> Just type keywords (e.g., <code>user api</code>)</li>
+                <li><strong>Property Search:</strong> Search specific fields
+                    <ul>
+                        <li><code>APIName=UserService</code></li>
+                        <li><code>Platform!=AWS</code></li>
+                        <li><code>Environment contains prod</code></li>
+                        <li><code>APIVersion > 2.0</code></li>
+                        <li><code>LastUpdated >= 2024-01-01</code></li>
+                    </ul>
+                </li>
+                <li><strong>Logical Operations:</strong>
+                    <ul>
+                        <li><code>Platform=AWS AND Environment=prod</code></li>
+                        <li><code>APIName contains user OR APIName contains customer</code></li>
+                    </ul>
+                </li>
+                <li><strong>Regex Search:</strong> Use <code>/pattern/</code> (e.g., <code>/^user.*v[0-9]+/</code>)</li>
+            </ul>
+            
+            <h4>Operators:</h4>
+            <table class="help-table">
+                <tr>
+                    <th>Operator</th>
+                    <th>Description</th>
+                    <th>Example</th>
+                </tr>
+                <tr>
+                    <td>=</td>
+                    <td>Exact match</td>
+                    <td>APIName=UserAPI</td>
+                </tr>
+                <tr>
+                    <td>!=</td>
+                    <td>Not equal</td>
+                    <td>Platform!=Azure</td>
+                </tr>
+                <tr>
+                    <td>contains</td>
+                    <td>Partial match</td>
+                    <td>APIPath contains /users/</td>
+                </tr>
+                <tr>
+                    <td>startswith</td>
+                    <td>Starts with</td>
+                    <td>APIName startswith User</td>
+                </tr>
+                <tr>
+                    <td>endswith</td>
+                    <td>Ends with</td>
+                    <td>APIPath endswith /list</td>
+                </tr>
+                <tr>
+                    <td>&gt;, &lt;, &gt;=, &lt;=</td>
+                    <td>Comparison</td>
+                    <td>APIVersion >= 2.0</td>
+                </tr>
+            </table>
+            
+            <h4>Tips:</h4>
+            <ul>
+                <li>Searches are case-insensitive by default</li>
+                <li>Use quotes for values with spaces: <code>UpdatedBy="John Doe"</code></li>
+                <li>Combine multiple conditions with AND/OR</li>
+                <li>Field names support typo tolerance (Platform/Plaform, Environment/Enviroment)</li>
+            </ul>
+        </div>
+    </details>
+</div>

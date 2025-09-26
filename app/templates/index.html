@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CCR API Manager</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>CCR API Manager</h1>
+            <div class="nav-buttons">
+                <button class="nav-btn active">Search</button>
+                <a href="/health" class="nav-btn">Health</a>
+            </div>
+        </header>
+
+        <!-- Search Section -->
+        <div class="search-section">
+            <h2>API Search</h2>
+            
+            <!-- Search Help & Examples (Collapsible) -->
+            <details class="search-help">
+                <summary>▸ Search Help & Examples</summary>
+                <div class="help-content">
+                    <h3>Search Syntax Guide</h3>
+                    
+                    <div class="help-section">
+                        <h4>1. Simple Text Search</h4>
+                        <p>Search across all fields with simple text. Not case sensitive by default.</p>
+                        <ul>
+                            <li><code>blue</code> - Find all APIs containing "blue"</li>
+                            <li><code>tst</code> - Find all APIs with "tst" in any field</li>
+                            <li><code>ip4</code> - Find all APIs related to "ip4"</li>
+                            <li><code>Running</code> - Find all APIs with "Running" status</li>
+                        </ul>
+                        <p class="note">✓ Enable "Regex Mode" for pattern matching</p>
+                        <p class="note">✓ Enable "Case Sensitive" for exact case matching</p>
+                    </div>
+                    
+                    <div class="help-section">
+                        <h4>2. Attribute Based Search (Case Sensitive)</h4>
+                        <p class="important">⚠️ Attribute searches are ALWAYS case sensitive!</p>
+                        <p>Search for specific field values using the format: <code>Attribute = value</code></p>
+                        <ul>
+                            <li><code>API NAME = ivp-test-app-blue</code> - Exact API name match</li>
+                            <li><code>Platform = IP4</code> - APIs on IP4 platform</li>
+                            <li><code>Environment = tst</code> - APIs in tst environment</li>
+                            <li><code>Status = Running</code> - APIs with Running status</li>
+                            <li><code>UpdatedBy = Jibran Patel</code> - APIs updated by specific user</li>
+                        </ul>
+                        <p class="note">Supported attributes: API NAME, Platform, Environment, Status, UpdatedBy</p>
+                    </div>
+                    
+                    <div class="help-section">
+                        <h4>3. Properties Based Search (Case Sensitive)</h4>
+                        <p class="important">⚠️ Property searches are ALWAYS case sensitive!</p>
+                        <p>Search within Properties using: <code>Properties : key = value</code></p>
+                        <ul>
+                            <li><code>Properties : env = tst</code> - Find APIs where env property equals "tst"</li>
+                            <li><code>Properties : unitTest = false</code> - Find APIs where unitTest is "false"</li>
+                            <li><code>Properties : mule.env = tst</code> - Nested property with dots in name</li>
+                            <li><code>Properties : http.listener.port = 8081</code> - Specific port configuration</li>
+                            <li><code>Properties : debug.logging = true</code> - Debug logging enabled</li>
+                        </ul>
+                        <p class="note">💡 Property keys and values must match exactly (case sensitive)</p>
+                    </div>
+                    
+                    <div class="help-section">
+                        <h4>4. Logical Operations (AND / OR)</h4>
+                        <p>Combine any search types using <strong>AND</strong> and <strong>OR</strong> operators:</p>
+                        
+                        <h5>Simple Combinations:</h5>
+                        <ul>
+                            <li><code>blue AND tst</code> - Both terms must be present</li>
+                            <li><code>IP4 OR IP5</code> - Either term can be present</li>
+                        </ul>
+                        
+                        <h5>Mixed Type Combinations:</h5>
+                        <ul>
+                            <li><code>blue AND API NAME = ivp-test-app-blue</code><br>
+                                Text search AND attribute match</li>
+                            <li><code>Platform = IP4 OR Properties : debug.logging = false</code><br>
+                                Attribute OR property search</li>
+                            <li><code>tst AND Platform = IP4 AND Properties : api.id = 2568991</code><br>
+                                Multiple conditions with AND</li>
+                        </ul>
+                        
+                        <h5>Complex Examples:</h5>
+                        <ul>
+                            <li><code>Platform = IP4 AND Environment = tst AND Properties : unitTest = false</code><br>
+                                Find IP4 platform APIs in tst environment with unitTest disabled</li>
+                            <li><code>Running AND Properties : mule.env = tst AND Properties : debug.logging = false</code><br>
+                                Running APIs in tst with debug logging disabled</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="help-section">
+                        <h4>Search Options</h4>
+                        <ul>
+                            <li><strong>Regex Mode:</strong> Enable regular expressions for text searches
+                                <ul>
+                                    <li>Example: <code>^ivp-.*-blue$</code> matches APIs starting with "ivp-" and ending with "-blue"</li>
+                                </ul>
+                            </li>
+                            <li><strong>Case Sensitive:</strong> Makes text searches case sensitive
+                                <ul>
+                                    <li>Note: Attribute and Property searches are always case sensitive</li>
+                                </ul>
+                            </li>
+                            <li><strong>Results per page:</strong> Control how many results to display</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="help-section important-notes">
+                        <h4>⚠️ Important Notes</h4>
+                        <ul>
+                            <li><strong>Attribute names</strong> are case insensitive (API NAME, Api Name, api name all work)</li>
+                            <li><strong>Attribute values</strong> are ALWAYS case sensitive</li>
+                            <li><strong>Property keys and values</strong> are ALWAYS case sensitive</li>
+                            <li>Boolean values in properties: use <code>true</code> or <code>false</code> (lowercase)</li>
+                            <li>Leave search field empty to show all APIs</li>
+                            <li>Spaces around <code>=</code> are optional</li>
+                            <li>Use exact property key names as they appear in the Properties object</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="help-section">
+                        <h4>Quick Reference</h4>
+                        <table class="quick-reference">
+                            <thead>
+                                <tr>
+                                    <th>Search Type</th>
+                                    <th>Example</th>
+                                    <th>Case Sensitive</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Simple Text</td>
+                                    <td><code>blue</code></td>
+                                    <td>Optional</td>
+                                </tr>
+                                <tr>
+                                    <td>Attribute</td>
+                                    <td><code>Platform = IP4</code></td>
+                                    <td>Always</td>
+                                </tr>
+                                <tr>
+                                    <td>Properties</td>
+                                    <td><code>Properties : env = tst</code></td>
+                                    <td>Always</td>
+                                </tr>
+                                <tr>
+                                    <td>Combined</td>
+                                    <td><code>blue AND Platform = IP4</code></td>
+                                    <td>Mixed</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </details>
+
+            <!-- Search Form -->
+            <form id="searchForm">
+                <div class="search-input-group">
+                    <input 
+                        type="text" 
+                        id="searchInput" 
+                        placeholder="Enter search query..." 
+                        class="search-input"
+                    >
+                    <button type="submit" class="search-btn">SEARCH</button>
+                    <button type="button" class="clear-btn">CLEAR</button>
+                </div>
+                
+                <div class="search-options">
+                    <label>
+                        <input type="checkbox" id="regexMode"> Regex Mode
+                    </label>
+                    <label>
+                        <input type="checkbox" id="caseSensitive"> Case Sensitive
+                    </label>
+                    <select id="resultsPerPage">
+                        <option value="10">10 per page</option>
+                        <option value="25">25 per page</option>
+                        <option value="50">50 per page</option>
+                        <option value="100" selected>100 per page</option>
+                        <option value="200">200 per page</option>
+                    </select>
+                </div>
+            </form>
+
+            <!-- Error Container -->
+            <div id="errorContainer" class="error-message" style="display: none;"></div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="resultsContainer" class="results-section">
+            <!-- Results will be populated here -->
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="{{ url_for('static', filename='js/search.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/json-viewer.js') }}"></script>
+</body>
+</html>

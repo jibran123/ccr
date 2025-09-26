@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  mongo:
+    image: docker.io/library/mongo:latest
+    container_name: mongo
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - ccr_network
+    environment:
+      MONGO_INITDB_DATABASE: mydatabase
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/mydatabase --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongo-express:
+    image: docker.io/library/mongo-express:latest
+    container_name: mongo-express
+    restart: always
+    ports:
+      - "8081:8081"
+    networks:
+      - ccr_network
+    environment:
+      ME_CONFIG_MONGODB_SERVER: mongo
+      ME_CONFIG_MONGODB_PORT: 27017
+      ME_CONFIG_BASICAUTH: false
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  flask-app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: ccr-flask-app:latest
+    container_name: flask-app
+    restart: always
+    ports:
+      - "5000:5000"
+    networks:
+      - ccr_network
+    environment:
+      FLASK_ENV: production
+      MONGO_HOST: mongo
+      MONGO_PORT: 27017
+      MONGO_DB: mydatabase
+      MONGO_COLLECTION: APIs
+    volumes:
+      #- ./:/app:ro:Z
+      - ./logs:/app/logs:Z
+    depends_on:
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  ccr_network:
+    driver: bridge
+
+volumes:
+  mongo_data:
+    driver: local
