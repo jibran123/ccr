@@ -1,307 +1,273 @@
-from flask import Blueprint, request, jsonify
-from pymongo import MongoClient
-from pymongo.errors import PyMongoError
-from bson import ObjectId
-from datetime import datetime
+"""API routes for the application."""
+from flask import Blueprint, request, jsonify, current_app
 import logging
-import os
-
-# Import configuration
-from app.config import MONGO_HOST, MONGO_PORT, MONGO_DB, MONGO_COLLECTION
-
-# Import services and utilities
-from app.services.search_service import SearchService
-from app.utils.validators import validate_api_data
-from app.utils.parsers import (
-    format_api_response, 
-    build_platform_environment_update,
-    flatten_api_for_table
-)
 
 logger = logging.getLogger(__name__)
 
-# Create blueprint
-api_bp = Blueprint('api', __name__, url_prefix='/api')
+bp = Blueprint('api', __name__, url_prefix='/api')
 
-# Initialize services
-search_service = SearchService()
-
-def get_db():
-    """Get MongoDB database connection"""
-    client = MongoClient(MONGO_HOST, MONGO_PORT)
-    return client[MONGO_DB]
-
-@api_bp.route('/apis', methods=['GET'])
-def get_apis():
-    """Get all APIs with optional filtering - handles Platform array structure"""
+@bp.route('/search', methods=['GET', 'POST'])
+def search():
+    """
+    Search APIs endpoint.
+    Updated to handle Platform array structure.
+    """
     try:
-        # Parse query parameters
-        search_query = request.args.get('q', '')
-        case_sensitive = request.args.get('case_sensitive', 'false').lower() == 'true'
-        regex_mode = request.args.get('regex', 'false').lower() == 'true'
-        page = int(request.args.get('page', 1))
-        per_page = int(request.args.get('per_page', 100))
-        
-        # Check for property search
-        prop_key = request.args.get('prop_key')
-        prop_value = request.args.get('prop_value')
-        
-        if prop_key and prop_value:
-            # Use property search
-            formatted_apis = search_service.search_by_properties(prop_key, prop_value)
-            return jsonify({
-                'apis': formatted_apis,
-                'total': len(formatted_apis),
-                'page': 1,
-                'per_page': len(formatted_apis),
-                'total_pages': 1
-            })
+        if request.method == 'POST':
+            data = request.get_json()
+            query = data.get('q', '')
+            page = data.get('page', 1)
+            page_size = data.get('page_size', 10)
         else:
-            # Regular search
-            result = search_service.search_apis(
-                query=search_query,
-                case_sensitive=case_sensitive,
-                regex_mode=regex_mode,
-                page=page,
-                per_page=per_page
-            )
-            return jsonify(result)
+            query = request.args.get('q', '')
+            page = int(request.args.get('page', 1))
+            page_size = int(request.args.get('page_size', 10))
         
-    except Exception as e:
-        logger.error(f"Error in get_apis: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@api_bp.route('/apis/<api_id>', methods=['GET'])
-def get_api(api_id):
-    """Get single API by ID with full Platform array structure"""
-    try:
-        api = search_service.get_api_by_id(api_id)
+        # Validate pagination
+        if page < 1:
+            return jsonify({'error': 'Page must be >= 1'}), 400
+        if page_size < 1 or page_size > 100:
+            return jsonify({'error': 'Page size must be between 1 and 100'}), 400
         
-        if not api:
-            return jsonify({'error': 'API not found'}), 404
+        # Use the database service to search
+        # The search_apis method now returns flattened results
+        all_results = current_app.db_service.search_apis(
+            query=query,
+            regex=False,
+            case_sensitive=False,
+            limit=1000  # Get more results for pagination
+        )
         
-        # Format response with nested structure
-        formatted = format_api_response(api)
+        # Calculate pagination
+        total_results = len(all_results)
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
         
-        return jsonify(formatted)
+        # Get paginated results
+        paginated_results = all_results[start_idx:end_idx]
         
-    except Exception as e:
-        logger.error(f"Error in get_api: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@api_bp.route('/apis/deploy', methods=['POST'])
-def deploy_api():
-    """Deploy/update API with Platform array structure using upsert logic"""
-    try:
-        data = request.json
-        
-        # Validate input
-        is_valid, error_msg = validate_api_data(data)
-        if not is_valid:
-            return jsonify({'error': error_msg}), 400
-        
-        api_name = data['api_name']
-        platform_id = data['platform_id']
-        environment_id = data['environment_id']
-        
-        # Build environment document
-        env_doc = build_platform_environment_update(data)
-        
-        # Get database
-        db = get_db()
-        apis_collection = db[MONGO_COLLECTION]
-        
-        # Find existing API
-        existing_api = apis_collection.find_one({'API Name': api_name})
-        
-        if not existing_api:
-            # Create new API with Platform array
-            new_api = {
-                'API Name': api_name,
-                'Platform': [{
-                    'PlatformID': platform_id,
-                    'Environment': [env_doc]
-                }]
-            }
-            result = apis_collection.insert_one(new_api)
-            logger.info(f"Created new API: {api_name} with platform {platform_id}/{environment_id}")
-            return jsonify({
-                'message': f'API {api_name} created successfully',
-                'api_id': str(result.inserted_id),
-                'action': 'created'
-            }), 201
-        
-        # API exists - ensure Platform field is an array
-        if 'Platform' not in existing_api or not isinstance(existing_api['Platform'], list):
-            # Convert to array structure
-            apis_collection.update_one(
-                {'API Name': api_name},
-                {'$set': {'Platform': []}}
-            )
-            existing_api['Platform'] = []
-        
-        # Check if platform exists
-        platform_exists = False
-        platform_index = -1
-        
-        for idx, platform in enumerate(existing_api['Platform']):
-            if platform.get('PlatformID') == platform_id:
-                platform_exists = True
-                platform_index = idx
-                break
-        
-        if not platform_exists:
-            # Add new platform to array
-            apis_collection.update_one(
-                {'API Name': api_name},
-                {'$push': {
-                    'Platform': {
-                        'PlatformID': platform_id,
-                        'Environment': [env_doc]
-                    }
-                }}
-            )
-            logger.info(f"Added platform {platform_id} to API {api_name}")
-            return jsonify({
-                'message': f'Platform {platform_id} added to API {api_name}',
-                'action': 'platform_added'
-            }), 200
-        
-        # Platform exists - check for environment
-        platform_data = existing_api['Platform'][platform_index]
-        if 'Environment' not in platform_data:
-            platform_data['Environment'] = []
-        
-        env_exists = False
-        env_index = -1
-        
-        for idx, env in enumerate(platform_data['Environment']):
-            if env.get('environmentID') == environment_id:
-                env_exists = True
-                env_index = idx
-                break
-        
-        if env_exists:
-            # Update existing environment (redeployment)
-            update_path = f'Platform.{platform_index}.Environment.{env_index}'
-            apis_collection.update_one(
-                {'API Name': api_name},
-                {'$set': {update_path: env_doc}}
-            )
-            logger.info(f"Updated environment {environment_id} for {api_name}/{platform_id}")
-            return jsonify({
-                'message': f'Environment {environment_id} updated for {api_name}',
-                'action': 'environment_updated'
-            }), 200
-        else:
-            # Add new environment to platform
-            apis_collection.update_one(
-                {
-                    'API Name': api_name,
-                    'Platform.PlatformID': platform_id
-                },
-                {'$push': {
-                    'Platform.$.Environment': env_doc
-                }}
-            )
-            logger.info(f"Added environment {environment_id} to {api_name}/{platform_id}")
-            return jsonify({
-                'message': f'Environment {environment_id} added to platform {platform_id}',
-                'action': 'environment_added'
-            }), 200
-            
-    except Exception as e:
-        logger.error(f"Error in deploy_api: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@api_bp.route('/apis/<api_id>', methods=['DELETE'])
-def delete_api(api_id):
-    """Delete an API by ID"""
-    try:
-        db = get_db()
-        apis_collection = db[MONGO_COLLECTION]
-        
-        result = apis_collection.delete_one({'_id': ObjectId(api_id)})
-        
-        if result.deleted_count == 0:
-            return jsonify({'error': 'API not found'}), 404
-        
-        logger.info(f"Deleted API with ID: {api_id}")
-        return jsonify({'message': 'API deleted successfully'}), 200
-        
-    except Exception as e:
-        logger.error(f"Error in delete_api: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@api_bp.route('/apis/search/properties', methods=['GET'])
-def search_by_properties():
-    """Search APIs by property key-value pair"""
-    try:
-        prop_key = request.args.get('key')
-        prop_value = request.args.get('value')
-        
-        if not prop_key or not prop_value:
-            return jsonify({'error': 'Both key and value parameters are required'}), 400
-        
-        # Use the search service for property search
-        formatted_apis = search_service.search_by_properties(prop_key, prop_value)
+        # Calculate total pages
+        total_pages = (total_results + page_size - 1) // page_size
         
         return jsonify({
-            'apis': formatted_apis,
-            'total': len(formatted_apis),
-            'page': 1,
-            'per_page': len(formatted_apis),
-            'total_pages': 1
+            'status': 'success',
+            'data': paginated_results,
+            'metadata': {
+                'query': query,
+                'page': page,
+                'page_size': page_size,
+                'total_results': total_results,
+                'total_pages': total_pages,
+                'results_in_page': len(paginated_results)
+            }
         })
         
     except Exception as e:
-        logger.error(f"Error in search_by_properties: {e}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Search error: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
-@api_bp.route('/apis/stats', methods=['GET'])
-def get_stats():
-    """Get statistics about APIs"""
+@bp.route('/suggestions/<field>', methods=['GET'])
+def get_suggestions(field):
+    """Get autocomplete suggestions for a field."""
     try:
-        db = get_db()
-        apis_collection = db[MONGO_COLLECTION]
+        prefix = request.args.get('prefix', '')
         
-        # Get total count
-        total_apis = apis_collection.count_documents({})
+        # Map field names to database fields (updated for Platform array)
+        field_mapping = {
+            'Platform': 'Platform.PlatformID',
+            'Environment': 'Platform.Environment.environmentID',
+            'Status': 'Platform.Environment.status',
+            'UpdatedBy': 'Platform.Environment.updatedBy',
+            'APIName': 'API Name'
+        }
         
-        # Aggregate platform and environment counts
+        db_field = field_mapping.get(field, field)
+        
+        # Get distinct values from database
+        # Handle both old and new structure
+        if field in ['Platform', 'Environment', 'Status', 'UpdatedBy']:
+            # For nested fields, we need to use aggregation
+            pipeline = []
+            
+            if field == 'Platform':
+                pipeline = [
+                    {'$unwind': {'path': '$Platform', 'preserveNullAndEmptyArrays': True}},
+                    {'$group': {'_id': '$Platform.PlatformID'}},
+                    {'$match': {'_id': {'$regex': f'^{prefix}', '$options': 'i'}}},
+                    {'$limit': 10}
+                ]
+            elif field in ['Environment', 'Status', 'UpdatedBy']:
+                nested_field = {
+                    'Environment': 'environmentID',
+                    'Status': 'status',
+                    'UpdatedBy': 'updatedBy'
+                }[field]
+                pipeline = [
+                    {'$unwind': {'path': '$Platform', 'preserveNullAndEmptyArrays': True}},
+                    {'$unwind': {'path': '$Platform.Environment', 'preserveNullAndEmptyArrays': True}},
+                    {'$group': {'_id': f'$Platform.Environment.{nested_field}'}},
+                    {'$match': {'_id': {'$regex': f'^{prefix}', '$options': 'i'}}},
+                    {'$limit': 10}
+                ]
+            
+            results = list(current_app.db_service.collection.aggregate(pipeline))
+            suggestions = [r['_id'] for r in results if r['_id']]
+        else:
+            # For simple fields, use distinct
+            all_values = current_app.db_service.collection.distinct(db_field)
+            
+            # Filter by prefix
+            suggestions = [
+                v for v in all_values 
+                if v and str(v).lower().startswith(prefix.lower())
+            ][:10]
+        
+        return jsonify({
+            'status': 'success',
+            'data': suggestions
+        })
+        
+    except Exception as e:
+        logger.error(f"Suggestions error: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+@bp.route('/stats', methods=['GET'])
+def get_stats():
+    """Get database statistics."""
+    try:
+        stats = current_app.db_service.get_stats()
+        
+        # Count total deployments (platform-environment combinations)
         pipeline = [
-            {'$unwind': '$Platform'},
-            {'$unwind': '$Platform.Environment'},
+            {'$project': {
+                'deployments': {
+                    '$cond': {
+                        'if': {'$isArray': '$Platform'},
+                        'then': {
+                            '$reduce': {
+                                'input': '$Platform',
+                                'initialValue': 0,
+                                'in': {
+                                    '$add': [
+                                        '$$value',
+                                        {'$cond': {
+                                            'if': {'$isArray': '$$this.Environment'},
+                                            'then': {'$size': '$$this.Environment'},
+                                            'else': 1
+                                        }}
+                                    ]
+                                }
+                            }
+                        },
+                        'else': 1
+                    }
+                }
+            }},
             {'$group': {
                 '_id': None,
-                'platforms': {'$addToSet': '$Platform.PlatformID'},
-                'environments': {'$addToSet': '$Platform.Environment.environmentID'},
-                'total_deployments': {'$sum': 1}
+                'total_deployments': {'$sum': '$deployments'}
             }}
         ]
         
-        result = list(apis_collection.aggregate(pipeline))
+        deployment_result = list(current_app.db_service.collection.aggregate(pipeline))
+        total_deployments = deployment_result[0]['total_deployments'] if deployment_result else 0
         
-        if result:
-            stats = result[0]
-            return jsonify({
-                'total_apis': total_apis,
-                'total_deployments': stats.get('total_deployments', 0),
-                'unique_platforms': len(stats.get('platforms', [])),
-                'unique_environments': len(stats.get('environments', [])),
-                'platforms': stats.get('platforms', []),
-                'environments': stats.get('environments', [])
-            })
-        else:
-            return jsonify({
-                'total_apis': total_apis,
-                'total_deployments': 0,
-                'unique_platforms': 0,
-                'unique_environments': 0,
-                'platforms': [],
-                'environments': []
-            })
+        stats['total_deployments'] = total_deployments
+        
+        return jsonify({
+            'status': 'success',
+            'data': stats
+        })
         
     except Exception as e:
-        logger.error(f"Error in get_stats: {e}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Stats error: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+@bp.route('/export', methods=['POST'])
+def export_data():
+    """
+    Export search results.
+    Updated to handle flattened Platform array data.
+    """
+    try:
+        data = request.get_json()
+        query = data.get('query', '')
+        format_type = data.get('format', 'json')
+        
+        # Get search results (already flattened)
+        results = current_app.db_service.search_apis(
+            query=query,
+            regex=False,
+            case_sensitive=False,
+            limit=10000
+        )
+        
+        if format_type == 'csv':
+            import csv
+            import io
+            
+            # Create CSV
+            output = io.StringIO()
+            
+            if results:
+                # Use the keys from the first result as headers
+                fieldnames = results[0].keys()
+                writer = csv.DictWriter(output, fieldnames=fieldnames)
+                
+                writer.writeheader()
+                for row in results:
+                    # Convert Properties dict to string for CSV
+                    if 'Properties' in row:
+                        row['Properties'] = str(row['Properties'])
+                    writer.writerow(row)
+            
+            # Get CSV string
+            csv_data = output.getvalue()
+            
+            # Return as CSV file
+            response = current_app.response_class(
+                csv_data,
+                mimetype='text/csv',
+                headers={'Content-Disposition': 'attachment; filename=api_export.csv'}
+            )
+            return response
+            
+        else:
+            # Return as JSON
+            return jsonify({
+                'status': 'success',
+                'data': results,
+                'count': len(results)
+            })
+            
+    except Exception as e:
+        logger.error(f"Export error: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+@bp.route('/health', methods=['GET'])
+def health_check():
+    """Health check endpoint."""
+    try:
+        health = current_app.db_service.health_check()
+        status_code = 200 if health['status'] == 'healthy' else 503
+        
+        return jsonify(health), status_code
+        
+    except Exception as e:
+        logger.error(f"Health check error: {str(e)}")
+        return jsonify({
+            'status': 'unhealthy',
+            'error': str(e)
+        }), 503

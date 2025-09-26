@@ -101,6 +101,7 @@ class DatabaseService:
                    case_sensitive: bool = False, limit: int = 100) -> List[Dict[str, Any]]:
         """
         Search APIs based on advanced query syntax.
+        Now handles Platform array structure and returns flattened results.
         
         Args:
             query: Search query supporting multiple syntaxes
@@ -109,16 +110,21 @@ class DatabaseService:
             limit: Maximum results
             
         Returns:
-            List of matching API documents
+            List of matching API documents (flattened for table display)
         """
         try:
             logger.info(f"=== SEARCH START ===")
             logger.info(f"Query: '{query}'")
             logger.info(f"Regex: {regex}, Case Sensitive: {case_sensitive}")
             
-            # If empty query, return all
+            # If empty query, return all flattened
             if not query or not query.strip():
-                return self.get_all_apis(limit)
+                apis = self.get_all_apis(limit)
+                flattened_results = []
+                for api in apis:
+                    rows = self._flatten_api_document(api)
+                    flattened_results.extend(rows)
+                return flattened_results
             
             # Parse and build filter
             search_filter = self._build_search_filter(query, regex, case_sensitive)
@@ -137,9 +143,11 @@ class DatabaseService:
                 # Convert dates to strings
                 doc = self._convert_dates_to_strings(doc)
                 
-                results.append(doc)
+                # Flatten the document for table display
+                rows = self._flatten_api_document(doc)
+                results.extend(rows)
             
-            logger.info(f"Search returned {len(results)} results")
+            logger.info(f"Search returned {len(results)} flattened results")
             logger.info(f"=== SEARCH END ===")
             return results
             
@@ -147,9 +155,107 @@ class DatabaseService:
             logger.error(f"Search error: {str(e)}", exc_info=True)
             return []
     
+    def search_apis_platform_array(self, query: str, regex: bool = False, 
+                                  case_sensitive: bool = False, limit: int = 100) -> List[Dict[str, Any]]:
+        """
+        Search APIs with Platform array structure.
+        Returns flattened results for table display.
+        """
+        return self.search_apis(query, regex, case_sensitive, limit)
+    
+    def _flatten_api_document(self, api: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Flatten API document with Platform array into table rows.
+        Each platform-environment combination becomes a row.
+        """
+        rows = []
+        api_name = api.get('API Name', 'N/A')
+        api_id = str(api.get('_id', '')) if api.get('_id') else ''
+        
+        # Check if Platform is an array (new structure)
+        if 'Platform' in api and isinstance(api['Platform'], list) and len(api['Platform']) > 0:
+            for platform in api['Platform']:
+                platform_id = platform.get('PlatformID', 'N/A')
+                
+                if 'Environment' in platform and isinstance(platform['Environment'], list) and len(platform['Environment']) > 0:
+                    for env in platform['Environment']:
+                        row = {
+                            '_id': api_id,
+                            'API Name': api_name,
+                            'PlatformID': platform_id,
+                            'Environment': env.get('environmentID', 'N/A'),
+                            'DeploymentDate': self._format_date(env.get('deploymentDate')),
+                            'LastUpdated': self._format_date(env.get('lastUpdated')),
+                            'UpdatedBy': env.get('updatedBy', 'N/A'),
+                            'Status': env.get('status', 'UNKNOWN'),
+                            'Properties': env.get('Properties', {})
+                        }
+                        rows.append(row)
+                else:
+                    # Platform without environments
+                    row = {
+                        '_id': api_id,
+                        'API Name': api_name,
+                        'PlatformID': platform_id,
+                        'Environment': 'N/A',
+                        'DeploymentDate': 'N/A',
+                        'LastUpdated': 'N/A',
+                        'UpdatedBy': 'N/A',
+                        'Status': 'UNKNOWN',
+                        'Properties': {}
+                    }
+                    rows.append(row)
+        
+        # Handle old structure (Platform as string) - for backward compatibility
+        elif 'Platform' in api and isinstance(api['Platform'], str):
+            row = {
+                '_id': api_id,
+                'API Name': api_name,
+                'PlatformID': api.get('Platform', 'N/A'),
+                'Environment': api.get('Environment', 'N/A'),
+                'DeploymentDate': self._format_date(api.get('DeploymentDate')),
+                'LastUpdated': self._format_date(api.get('LastUpdated')),
+                'UpdatedBy': api.get('UpdatedBy', 'N/A'),
+                'Status': api.get('Status', 'UNKNOWN'),
+                'Properties': api.get('Properties', {})
+            }
+            rows.append(row)
+        else:
+            # No platform data - return single row with N/A values
+            row = {
+                '_id': api_id,
+                'API Name': api_name,
+                'PlatformID': 'N/A',
+                'Environment': 'N/A',
+                'DeploymentDate': 'N/A',
+                'LastUpdated': 'N/A',
+                'UpdatedBy': 'N/A',
+                'Status': 'UNKNOWN',
+                'Properties': {}
+            }
+            rows.append(row)
+        
+        return rows
+    
+    def _format_date(self, date_value):
+        """Format date for display."""
+        if not date_value:
+            return 'N/A'
+        if isinstance(date_value, datetime):
+            return date_value.strftime('%Y-%m-%d %H:%M:%S')
+        elif isinstance(date_value, str):
+            # Try to parse ISO format
+            try:
+                dt = datetime.fromisoformat(date_value.replace('Z', '+00:00'))
+                return dt.strftime('%Y-%m-%d %H:%M:%S')
+            except:
+                return date_value
+        return str(date_value)
+    
     def _build_search_filter(self, query: str, regex: bool, case_sensitive: bool) -> Dict:
         """
         Build MongoDB filter from search query.
+        Updated to handle Platform array structure.
         
         Supports:
         1. Simple text search: "blue"
@@ -192,6 +298,7 @@ class DatabaseService:
     def _parse_single_condition(self, condition: str, regex: bool, case_sensitive: bool) -> Optional[Dict]:
         """
         Parse a single search condition.
+        Updated to handle Platform array structure.
         
         Returns MongoDB filter for this condition.
         """
@@ -207,32 +314,23 @@ class DatabaseService:
                 
                 logger.info(f"Property search: key='{key}', value='{value}'")
                 
-                # Use JavaScript $where function to handle properties with dots
-                # This works correctly with property names containing dots
-                # Escape single quotes in key and value to prevent injection
-                key_escaped = key.replace("'", "\\'")
-                value_escaped = value.replace("'", "\\'")
-                
-                where_clause = f"""function() {{
-                    if (!this.Platform || !this.Platform.Environment) return false;
-                    for (var i = 0; i < this.Platform.Environment.length; i++) {{
-                        if (this.Platform.Environment[i].Properties && 
-                            this.Platform.Environment[i].Properties['{key_escaped}'] === '{value_escaped}') {{
-                            return true;
-                        }}
-                    }}
-                    return false;
-                }}"""
-                
-                return {'$where': where_clause}
+                # For Platform array structure, search in nested Properties
+                return {
+                    '$or': [
+                        # New structure - Platform array
+                        {'Platform.Environment.Properties.' + key: value},
+                        # Old structure - top-level Properties
+                        {'Properties.' + key: value}
+                    ]
+                }
         
         # Check for attribute searches
         attribute_patterns = {
             'API NAME': 'API Name',
-            'Platform': 'Platform.PlatformID',
-            'Environment': 'Platform.Environment.environmentID',
-            'Status': 'Platform.Environment.Status',
-            'UpdatedBy': 'Platform.Environment.UpdatedBy'
+            'Platform': 'Platform.PlatformID',  # Updated for array
+            'Environment': 'Platform.Environment.environmentID',  # Updated for array
+            'Status': 'Platform.Environment.status',  # Updated for array
+            'UpdatedBy': 'Platform.Environment.updatedBy'  # Updated for array
         }
         
         for attr_name, field_path in attribute_patterns.items():
@@ -243,18 +341,15 @@ class DatabaseService:
                 value = match.group(1).strip()
                 logger.info(f"Attribute search: {attr_name} = '{value}'")
                 
-                # Special handling for Environment array fields
+                # Build appropriate filter based on field path
                 if 'Platform.Environment.' in field_path:
-                    # Use $elemMatch for array fields
-                    field_name = field_path.replace('Platform.Environment.', '')
-                    return {
-                        'Platform.Environment': {
-                            '$elemMatch': {
-                                field_name: value
-                            }
-                        }
-                    }
+                    # For nested array fields, use basic matching
+                    return {field_path: value}
+                elif field_path == 'Platform.PlatformID':
+                    # Search in array
+                    return {'Platform.PlatformID': value}
                 else:
+                    # Direct field match
                     return {field_path: value}
         
         # If no special syntax matched, treat as simple text search
@@ -269,9 +364,13 @@ class DatabaseService:
                     {'API Name': {'$regex': pattern}},
                     {'_id': {'$regex': pattern}},
                     {'Platform.PlatformID': {'$regex': pattern}},
-                    {'Platform.Environment': {'$elemMatch': {'environmentID': {'$regex': pattern}}}},
-                    {'Platform.Environment': {'$elemMatch': {'Status': {'$regex': pattern}}}},
-                    {'Platform.Environment': {'$elemMatch': {'UpdatedBy': {'$regex': pattern}}}}
+                    {'Platform.Environment.environmentID': {'$regex': pattern}},
+                    {'Platform.Environment.status': {'$regex': pattern}},
+                    {'Platform.Environment.updatedBy': {'$regex': pattern}},
+                    # Also search old structure
+                    {'Platform': {'$regex': pattern}},
+                    {'Environment': {'$regex': pattern}},
+                    {'Status': {'$regex': pattern}}
                 ]
             }
         else:
@@ -282,9 +381,13 @@ class DatabaseService:
                     {'API Name': {'$regex': re.escape(condition), '$options': options}},
                     {'_id': {'$regex': re.escape(condition), '$options': options}},
                     {'Platform.PlatformID': {'$regex': re.escape(condition), '$options': options}},
-                    {'Platform.Environment': {'$elemMatch': {'environmentID': {'$regex': re.escape(condition), '$options': options}}}},
-                    {'Platform.Environment': {'$elemMatch': {'Status': {'$regex': re.escape(condition), '$options': options}}}},
-                    {'Platform.Environment': {'$elemMatch': {'UpdatedBy': {'$regex': re.escape(condition), '$options': options}}}}
+                    {'Platform.Environment.environmentID': {'$regex': re.escape(condition), '$options': options}},
+                    {'Platform.Environment.status': {'$regex': re.escape(condition), '$options': options}},
+                    {'Platform.Environment.updatedBy': {'$regex': re.escape(condition), '$options': options}},
+                    # Also search old structure
+                    {'Platform': {'$regex': re.escape(condition), '$options': options}},
+                    {'Environment': {'$regex': re.escape(condition), '$options': options}},
+                    {'Status': {'$regex': re.escape(condition), '$options': options}}
                 ]
             }
     
@@ -317,18 +420,55 @@ class DatabaseService:
         try:
             total_count = self.collection.count_documents({})
             
-            # Get unique platforms
-            platforms = self.collection.distinct("Platform.PlatformID")
+            # Get unique platforms (handle both old and new structure)
+            pipeline = [
+                {'$project': {
+                    'platforms': {
+                        '$cond': {
+                            'if': {'$isArray': '$Platform'},
+                            'then': '$Platform.PlatformID',
+                            'else': ['$Platform']
+                        }
+                    }
+                }},
+                {'$unwind': '$platforms'},
+                {'$group': {
+                    '_id': None,
+                    'unique_platforms': {'$addToSet': '$platforms'}
+                }}
+            ]
             
-            # Get unique environments
-            environments = self.collection.distinct("Platform.Environment.environmentID")
+            platform_result = list(self.collection.aggregate(pipeline))
+            platforms = platform_result[0]['unique_platforms'] if platform_result else []
+            
+            # Get unique environments (handle both old and new structure)
+            env_pipeline = [
+                {'$project': {
+                    'environments': {
+                        '$cond': {
+                            'if': {'$isArray': '$Platform'},
+                            'then': '$Platform.Environment.environmentID',
+                            'else': ['$Environment']
+                        }
+                    }
+                }},
+                {'$unwind': '$environments'},
+                {'$unwind': {'path': '$environments', 'preserveNullAndEmptyArrays': True}},
+                {'$group': {
+                    '_id': None,
+                    'unique_environments': {'$addToSet': '$environments'}
+                }}
+            ]
+            
+            env_result = list(self.collection.aggregate(env_pipeline))
+            environments = env_result[0]['unique_environments'] if env_result else []
             
             return {
                 'total_apis': total_count,
                 'database': self.db_name,
                 'collection': self.collection_name,
-                'unique_platforms': len(platforms) if platforms else 0,
-                'unique_environments': len(environments) if environments else 0
+                'unique_platforms': len([p for p in platforms if p]),
+                'unique_environments': len([e for e in environments if e])
             }
             
         except Exception as e:
