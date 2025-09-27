@@ -1,4 +1,4 @@
-// Complete search.js file - Fixed for Platform array structure
+// Complete search.js file with Properties Modal
 let currentPage = 1;
 let currentPerPage = 100;
 let currentSearchQuery = '';
@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function initializeApp() {
     setupEventListeners();
+    createPropertiesModal();
     loadAPIs();  // Load initial data
 }
 
@@ -76,6 +77,54 @@ function setupEventListeners() {
     }
 }
 
+function createPropertiesModal() {
+    // Check if modal already exists
+    if (document.getElementById('propertiesModal')) {
+        return;
+    }
+    
+    // Create modal HTML
+    const modalHtml = `
+        <div id="propertiesModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>API Properties</h2>
+                    <span class="modal-close">&times;</span>
+                </div>
+                <div class="modal-body" id="modalBody">
+                    <!-- Properties will be inserted here -->
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-copy" onclick="copyProperties()">Copy to Clipboard</button>
+                    <button class="btn-close-modal">Close</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Add modal to body
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Setup modal event listeners
+    const modal = document.getElementById('propertiesModal');
+    const closeBtn = modal.querySelector('.modal-close');
+    const closeModalBtn = modal.querySelector('.btn-close-modal');
+    
+    closeBtn.onclick = function() {
+        modal.style.display = 'none';
+    };
+    
+    closeModalBtn.onclick = function() {
+        modal.style.display = 'none';
+    };
+    
+    window.onclick = function(event) {
+        if (event.target === modal) {
+            modal.style.display = 'none';
+        }
+    };
+}
+
 function performSearch() {
     const searchInput = document.getElementById('searchInput');
     currentSearchQuery = searchInput ? searchInput.value : '';
@@ -86,13 +135,11 @@ function performSearch() {
 async function loadAPIs() {
     try {
         console.log('Loading APIs...');
-        console.log('Query:', currentSearchQuery);
-        console.log('Page:', currentPage, 'PerPage:', currentPerPage);
         
         // Show loading state
         const tbody = document.getElementById('apiTableBody');
         if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;"><div class="loading"><div class="spinner"></div><p>Loading APIs...</p></div></td></tr>';
         }
         
         // Build query parameters
@@ -106,7 +153,6 @@ async function loadAPIs() {
         console.log('Fetching from:', url);
         
         const response = await fetch(url);
-        console.log('Response status:', response.status);
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -144,7 +190,6 @@ async function loadAPIs() {
 }
 
 function displayAPIs(apis) {
-    console.log('Displaying APIs:', apis);
     const tbody = document.getElementById('apiTableBody');
     
     if (!tbody) {
@@ -155,7 +200,7 @@ function displayAPIs(apis) {
     tbody.innerHTML = '';
     
     if (!apis || apis.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">No APIs found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="no-results">No APIs found</td></tr>';
         return;
     }
     
@@ -163,9 +208,9 @@ function displayAPIs(apis) {
     apis.forEach((api, index) => {
         const tr = document.createElement('tr');
         
-        // Handle field names from backend (both formats)
-        const apiName = api['API Name'] || api.apiName || api.api_name || 'N/A';
-        const platform = api.PlatformID || api.platform || api.Platform || 'N/A';
+        // Handle field names from backend
+        const apiName = api['API Name'] || api.apiName || 'N/A';
+        const platform = api.PlatformID || api.platform || 'N/A';
         const environment = api.Environment || api.environment || 'N/A';
         const deploymentDate = api.DeploymentDate || api.deploymentDate || 'N/A';
         const lastUpdated = api.LastUpdated || api.lastUpdated || 'N/A';
@@ -175,8 +220,12 @@ function displayAPIs(apis) {
         
         const statusClass = getStatusClass(status);
         
+        // Store properties in data attribute for the modal
+        tr.dataset.properties = JSON.stringify(properties);
+        tr.dataset.apiName = apiName;
+        
         tr.innerHTML = `
-            <td>${escapeHtml(apiName)}</td>
+            <td class="api-name">${escapeHtml(apiName)}</td>
             <td>${escapeHtml(platform)}</td>
             <td>${escapeHtml(environment)}</td>
             <td>${escapeHtml(deploymentDate)}</td>
@@ -184,7 +233,7 @@ function displayAPIs(apis) {
             <td>${escapeHtml(updatedBy)}</td>
             <td><span class="status-badge ${statusClass}">${escapeHtml(status)}</span></td>
             <td>
-                <button onclick='viewProperties(${JSON.stringify(properties)})' class="btn-view">
+                <button onclick='viewProperties(${JSON.stringify(properties)}, "${escapeHtml(apiName)}")' class="btn-view">
                     <i class="fas fa-eye"></i> View
                 </button>
             </td>
@@ -201,22 +250,89 @@ function getStatusClass(status) {
         'PENDING': 'status-pending',
         'UNKNOWN': 'status-unknown',
         'FAILED': 'status-failed',
-        'DEPLOYING': 'status-deploying'
+        'DEPLOYING': 'status-deploying',
+        'DEPLOYED': 'status-running',
+        'ERROR': 'status-failed'
     };
     return statusMap[status] || 'status-unknown';
 }
 
-function viewProperties(properties) {
-    if (!properties || Object.keys(properties).length === 0) {
-        alert('No properties available');
+function viewProperties(properties, apiName) {
+    const modal = document.getElementById('propertiesModal');
+    const modalBody = document.getElementById('modalBody');
+    
+    if (!modal || !modalBody) {
+        // Fallback to alert if modal doesn't exist
+        if (!properties || Object.keys(properties).length === 0) {
+            alert('No properties available');
+        } else {
+            let content = 'Properties:\n\n';
+            for (const [key, value] of Object.entries(properties)) {
+                content += `${key}: ${value}\n`;
+            }
+            alert(content);
+        }
         return;
     }
     
-    let content = 'Properties:\n\n';
-    for (const [key, value] of Object.entries(properties)) {
-        content += `${key}: ${value}\n`;
+    // Store properties for copy function
+    window.currentProperties = properties;
+    
+    // Update modal header if needed
+    const modalHeader = modal.querySelector('.modal-header h2');
+    if (modalHeader && apiName) {
+        modalHeader.textContent = `Properties - ${apiName}`;
     }
-    alert(content);
+    
+    // Build properties HTML
+    if (!properties || Object.keys(properties).length === 0) {
+        modalBody.innerHTML = '<div class="no-properties">No properties available</div>';
+    } else {
+        let propertiesHtml = '<div class="properties-container">';
+        
+        for (const [key, value] of Object.entries(properties)) {
+            propertiesHtml += `
+                <div class="property-item">
+                    <span class="property-key">${escapeHtml(key)}:</span>
+                    <span class="property-value">${escapeHtml(String(value))}</span>
+                </div>
+            `;
+        }
+        
+        propertiesHtml += '</div>';
+        modalBody.innerHTML = propertiesHtml;
+    }
+    
+    // Show modal
+    modal.style.display = 'flex';
+}
+
+function copyProperties() {
+    if (!window.currentProperties) {
+        return;
+    }
+    
+    // Format properties as text
+    let text = '';
+    for (const [key, value] of Object.entries(window.currentProperties)) {
+        text += `${key}: ${value}\n`;
+    }
+    
+    // Copy to clipboard
+    navigator.clipboard.writeText(text).then(function() {
+        // Show success message
+        const copyBtn = document.querySelector('.btn-copy');
+        const originalText = copyBtn.textContent;
+        copyBtn.textContent = 'Copied!';
+        copyBtn.style.background = '#28a745';
+        
+        setTimeout(() => {
+            copyBtn.textContent = originalText;
+            copyBtn.style.background = '';
+        }, 2000);
+    }).catch(function(err) {
+        alert('Failed to copy to clipboard');
+    });
 }
 
 function updateResultsCount(count) {
@@ -268,6 +384,7 @@ function displayError(message) {
     if (tbody) {
         tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: red;"><i class="fas fa-exclamation-triangle"></i> ${escapeHtml(message)}</td></tr>`;
     }
+    updateResultsCount(0);
 }
 
 function escapeHtml(unsafe) {
@@ -305,7 +422,7 @@ function convertToCSV(data) {
     
     return [
         headers.join(','),
-        ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+        ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
     ].join('\n');
 }
 
@@ -324,5 +441,6 @@ function downloadBlob(blob, filename) {
 // Make functions globally available
 window.changePage = changePage;
 window.viewProperties = viewProperties;
+window.copyProperties = copyProperties;
 
 console.log('Search.js loaded successfully');
