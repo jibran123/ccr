@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CCR API Manager</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <!-- Add Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 </head>
 <body>
     <div class="container">
@@ -174,7 +176,7 @@
                         class="search-input"
                     >
                     <button type="submit" class="search-btn">SEARCH</button>
-                    <button type="button" class="clear-btn">CLEAR</button>
+                    <button type="button" class="clear-btn" id="clearBtn">CLEAR</button>
                 </div>
                 
                 <div class="search-options">
@@ -200,12 +202,47 @@
 
         <!-- Results Section -->
         <div id="resultsContainer" class="results-section">
-            <!-- Results will be populated here -->
+            <div class="results-header">
+                <h3 id="resultCount">
+                    <i class="fas fa-chart-bar"></i> Search Results
+                </h3>
+                <div class="export-buttons">
+                    <button id="exportJsonBtn" class="export-btn">
+                        <i class="fas fa-download"></i> Export JSON
+                    </button>
+                    <button id="exportCsvBtn" class="export-btn">
+                        <i class="fas fa-file-csv"></i> Export CSV
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Results Table -->
+            <div class="table-container">
+                <table class="results-table" id="apiTable">
+                    <thead>
+                        <tr>
+                            <th>API Name</th>
+                            <th>Platform</th>
+                            <th>Environment</th>
+                            <th>Deployment Date</th>
+                            <th>Last Updated</th>
+                            <th>Updated By</th>
+                            <th>Status</th>
+                            <th>Properties</th>
+                        </tr>
+                    </thead>
+                    <tbody id="apiTableBody">
+                        <!-- Results will be populated here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination -->
+            <div id="pagination" class="pagination"></div>
         </div>
     </div>
 
     <!-- Scripts -->
     <script src="{{ url_for('static', filename='js/search.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/json-viewer.js') }}"></script>
 </body>
 </html>

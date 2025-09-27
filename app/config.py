@@ -28,7 +28,7 @@ class Config:
     # CORS Settings
     CORS_ORIGINS = os.getenv('CORS_ORIGINS', '*')
 
-# Keep the module-level variables for backward compatibility
+# Keep module-level variables for backward compatibility
 MONGO_HOST = Config.MONGO_HOST
 MONGO_PORT = Config.MONGO_PORT
 MONGO_DB = Config.MONGO_DB
