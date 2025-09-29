@@ -270,39 +270,81 @@ body {
     color: #212529;
 }
 
-/* Status Badge */
+/* ==================== IMPROVED Status Badges ==================== */
 .status-badge {
     display: inline-block;
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 0.85rem;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
     font-weight: 600;
     text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-align: center;
+    min-width: 80px;
 }
 
+/* Green for Running/Active/Deployed */
 .status-running {
-    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    background: #28a745;
     color: white;
+    box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
 }
 
+.status-active {
+    background: #28a745;
+    color: white;
+    box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+}
+
+.status-deployed {
+    background: #28a745;
+    color: white;
+    box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+}
+
+/* Red for Stopped/Failed/Error */
 .status-stopped {
-    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    background: #dc3545;
     color: white;
-}
-
-.status-unknown {
-    background: #6c757d;
-    color: white;
-}
-
-.status-deploying {
-    background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
-    color: white;
+    box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
 }
 
 .status-failed {
-    background: linear-gradient(135deg, #dc3545 0%, #bd2130 100%);
+    background: #dc3545;
     color: white;
+    box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+}
+
+.status-error {
+    background: #dc3545;
+    color: white;
+    box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+}
+
+/* Yellow/Orange for Deploying/Pending */
+.status-deploying {
+    background: #ffc107;
+    color: #212529;
+    box-shadow: 0 2px 4px rgba(255, 193, 7, 0.3);
+}
+
+.status-pending {
+    background: #fd7e14;
+    color: white;
+    box-shadow: 0 2px 4px rgba(253, 126, 20, 0.3);
+}
+
+/* Gray for Unknown/Maintenance */
+.status-unknown {
+    background: #6c757d;
+    color: white;
+    box-shadow: 0 2px 4px rgba(108, 117, 125, 0.3);
+}
+
+.status-maintenance {
+    background: #6c757d;
+    color: white;
+    box-shadow: 0 2px 4px rgba(108, 117, 125, 0.3);
 }
 
 /* View Properties Button */
@@ -334,63 +376,193 @@ body {
     font-size: 1.1rem;
 }
 
-/* Search Help Section */
+/* ==================== IMPROVED Search Help Section ==================== */
 .search-help {
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 8px;
-    margin-bottom: 20px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: 2px solid #dee2e6;
+    border-radius: 10px;
+    margin-bottom: 25px;
     padding: 0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .search-help summary {
-    padding: 15px;
+    padding: 16px 20px;
     cursor: pointer;
     font-weight: 600;
+    font-size: 1rem;
     color: #495057;
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
     border-radius: 8px;
     user-select: none;
-    transition: all 0.2s;
+    transition: all 0.3s;
     list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 .search-help summary::-webkit-details-marker {
     display: none;
 }
 
+.search-help summary::before {
+    content: '▶';
+    font-size: 0.8rem;
+    transition: transform 0.3s;
+}
+
+.search-help[open] summary::before {
+    transform: rotate(90deg);
+}
+
 .search-help summary:hover {
-    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    color: #212529;
 }
 
 .search-help[open] summary {
     border-radius: 8px 8px 0 0;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
+    border-bottom: 2px solid #667eea;
 }
 
 .help-content {
-    padding: 20px;
+    padding: 25px;
     background: white;
     border-radius: 0 0 8px 8px;
-    max-height: 400px;
+    max-height: 500px;
     overflow-y: auto;
+    line-height: 1.6;
 }
 
 .help-section {
-    margin-bottom: 20px;
+    margin-bottom: 25px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.help-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.help-section h3 {
+    color: #212529;
+    margin-bottom: 8px;
+    font-size: 1.2rem;
+    font-weight: 600;
 }
 
 .help-section h4 {
     color: #495057;
+    margin: 15px 0 10px 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.help-section h5 {
+    color: #6c757d;
+    margin: 12px 0 8px 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.help-section p {
+    color: #495057;
     margin-bottom: 10px;
+    line-height: 1.5;
+}
+
+.help-section ul {
+    margin-left: 20px;
+    margin-bottom: 12px;
+}
+
+.help-section li {
+    color: #495057;
+    margin-bottom: 8px;
+    line-height: 1.5;
 }
 
 .help-section code {
     background: #f8f9fa;
-    padding: 2px 6px;
-    border-radius: 3px;
+    padding: 3px 8px;
+    border-radius: 4px;
     color: #e83e8c;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    font-weight: 500;
+    border: 1px solid #e9ecef;
+}
+
+.help-section .note {
+    color: #28a745;
+    font-weight: 500;
+    margin: 8px 0;
+}
+
+.help-section .important {
+    color: #dc3545;
+    font-weight: 600;
+}
+
+.important-notes {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 6px;
+    padding: 15px;
+    margin-top: 20px;
+}
+
+.important-notes h4 {
+    color: #856404;
+}
+
+.important-notes ul {
+    margin-top: 10px;
+}
+
+.important-notes li {
+    color: #856404;
+}
+
+/* Quick Reference Table */
+.quick-reference {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.quick-reference thead {
+    background: #f8f9fa;
+}
+
+.quick-reference th {
+    padding: 10px;
+    text-align: left;
+    font-weight: 600;
+    color: #495057;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.quick-reference td {
+    padding: 10px;
+    color: #495057;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.quick-reference td code {
+    background: #fff;
+}
+
+.quick-reference tbody tr:hover {
+    background: #f8f9fa;
 }
 
 /* Pagination */
@@ -444,7 +616,7 @@ body {
     background: white;
     border-radius: 12px;
     width: 90%;
-    max-width: 600px;
+    max-width: 800px;
     max-height: 80vh;
     display: flex;
     flex-direction: column;
@@ -481,6 +653,7 @@ body {
 .modal-header h2 {
     margin: 0;
     font-size: 1.5rem;
+    word-break: break-word;
 }
 
 .modal-close {
@@ -492,6 +665,7 @@ body {
     background: none;
     border: none;
     line-height: 1;
+    flex-shrink: 0;
 }
 
 .modal-close:hover {
@@ -502,14 +676,19 @@ body {
     flex: 1;
     overflow-y: auto;
     padding: 20px;
+    max-height: 50vh;
 }
 
+/* Properties Container */
 .properties-container {
     background: white;
+    width: 100%;
 }
 
 .property-item {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(150px, auto) 1fr;
+    gap: 15px;
     padding: 12px;
     border-bottom: 1px solid #e9ecef;
     transition: background 0.2s;
@@ -519,17 +698,29 @@ body {
     background: #f8f9fa;
 }
 
+.property-item:last-child {
+    border-bottom: none;
+}
+
 .property-key {
     font-weight: 600;
     color: #495057;
-    min-width: 200px;
-    margin-right: 20px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    max-width: 250px;
 }
 
 .property-value {
     color: #212529;
-    word-break: break-word;
-    flex: 1;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-all;
+    hyphens: auto;
+    white-space: pre-wrap;
+    max-width: 100%;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
 }
 
 .no-properties {
@@ -597,4 +788,36 @@ body {
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .modal-content {
+        width: 95%;
+        max-width: none;
+        margin: 10px;
+    }
+    
+    .property-item {
+        grid-template-columns: 1fr;
+        gap: 5px;
+    }
+    
+    .property-key {
+        font-size: 0.9rem;
+        max-width: 100%;
+    }
+    
+    .property-value {
+        font-size: 0.85rem;
+    }
+    
+    .search-help summary {
+        font-size: 0.95rem;
+        padding: 14px 16px;
+    }
+    
+    .help-content {
+        padding: 20px 15px;
+    }
 }

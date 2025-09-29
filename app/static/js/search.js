@@ -244,17 +244,43 @@ function displayAPIs(apis) {
 }
 
 function getStatusClass(status) {
+    // Convert status to uppercase for comparison
+    const normalizedStatus = status.toUpperCase();
+    
     const statusMap = {
+        // Green statuses
         'RUNNING': 'status-running',
+        'ACTIVE': 'status-active',
+        'DEPLOYED': 'status-deployed',
+        'SUCCESSFUL': 'status-running',
+        'SUCCESS': 'status-running',
+        'HEALTHY': 'status-running',
+        'ONLINE': 'status-running',
+        
+        // Red statuses
         'STOPPED': 'status-stopped',
-        'PENDING': 'status-pending',
-        'UNKNOWN': 'status-unknown',
         'FAILED': 'status-failed',
+        'ERROR': 'status-error',
+        'FAILURE': 'status-failed',
+        'OFFLINE': 'status-stopped',
+        'TERMINATED': 'status-stopped',
+        'CRASHED': 'status-failed',
+        
+        // Yellow/Orange statuses
         'DEPLOYING': 'status-deploying',
-        'DEPLOYED': 'status-running',
-        'ERROR': 'status-failed'
+        'PENDING': 'status-pending',
+        'STARTING': 'status-deploying',
+        'IN_PROGRESS': 'status-deploying',
+        'UPDATING': 'status-deploying',
+        
+        // Gray statuses
+        'UNKNOWN': 'status-unknown',
+        'MAINTENANCE': 'status-maintenance',
+        'PAUSED': 'status-maintenance',
+        'SUSPENDED': 'status-maintenance'
     };
-    return statusMap[status] || 'status-unknown';
+    
+    return statusMap[normalizedStatus] || 'status-unknown';
 }
 
 function viewProperties(properties, apiName) {

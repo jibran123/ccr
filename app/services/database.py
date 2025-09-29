@@ -51,10 +51,15 @@ class DatabaseService:
             count = self.collection.count_documents({})
             logger.info(f"Collection '{self.collection_name}' contains {count} documents")
             
-            # Log a sample document ID to verify
-            sample = self.collection.find_one({}, {'_id': 1})
+            # Log a sample document structure for debugging
+            sample = self.collection.find_one({})
             if sample:
                 logger.info(f"Sample document ID: {sample.get('_id')}")
+                # Log the structure to understand field names
+                if 'Platform' in sample and isinstance(sample['Platform'], list) and len(sample['Platform']) > 0:
+                    logger.info(f"Sample Platform structure: {list(sample['Platform'][0].keys()) if sample['Platform'] else []}")
+                    if 'Environment' in sample['Platform'][0] and len(sample['Platform'][0]['Environment']) > 0:
+                        logger.info(f"Sample Environment structure: {list(sample['Platform'][0]['Environment'][0].keys())}")
             
         except (ConnectionFailure, ServerSelectionTimeoutError) as e:
             logger.error(f"Failed to connect to MongoDB: {str(e)}")
@@ -167,42 +172,82 @@ class DatabaseService:
         """
         Flatten API document with Platform array into table rows.
         Each platform-environment combination becomes a row.
+        Enhanced to handle various field name formats.
         """
         rows = []
-        api_name = api.get('API Name', 'N/A')
+        api_name = api.get('API Name', api.get('api_name', api.get('apiName', 'N/A')))
         api_id = str(api.get('_id', '')) if api.get('_id') else ''
         
         # Check if Platform is an array (new structure)
         if 'Platform' in api and isinstance(api['Platform'], list) and len(api['Platform']) > 0:
             for platform in api['Platform']:
-                platform_id = platform.get('PlatformID', 'N/A')
+                # Handle various field name formats for PlatformID
+                platform_id = (platform.get('PlatformID') or 
+                             platform.get('platformID') or 
+                             platform.get('platform_id') or 
+                             platform.get('platformId') or 'N/A')
                 
                 if 'Environment' in platform and isinstance(platform['Environment'], list) and len(platform['Environment']) > 0:
                     for env in platform['Environment']:
+                        # Handle various field name formats
+                        environment_id = (env.get('environmentID') or 
+                                        env.get('environment_id') or 
+                                        env.get('environmentId') or 
+                                        env.get('environment') or 'N/A')
+                        
+                        # Try different field name formats for dates
+                        deployment_date = (env.get('deploymentDate') or 
+                                         env.get('deployment_date') or 
+                                         env.get('DeploymentDate') or 
+                                         env.get('created_at') or 
+                                         env.get('createdAt'))
+                        
+                        last_updated = (env.get('lastUpdated') or 
+                                      env.get('last_updated') or 
+                                      env.get('LastUpdated') or 
+                                      env.get('updated_at') or 
+                                      env.get('updatedAt'))
+                        
+                        updated_by = (env.get('updatedBy') or 
+                                    env.get('updated_by') or 
+                                    env.get('UpdatedBy') or 
+                                    env.get('modified_by') or 
+                                    env.get('modifiedBy') or 'N/A')
+                        
+                        status = (env.get('status') or 
+                                env.get('Status') or 
+                                env.get('state') or 
+                                env.get('State') or 'UNKNOWN')
+                        
+                        properties = (env.get('Properties') or 
+                                    env.get('properties') or 
+                                    env.get('props') or 
+                                    env.get('attributes') or {})
+                        
                         row = {
                             '_id': api_id,
                             'API Name': api_name,
                             'PlatformID': platform_id,
-                            'Environment': env.get('environmentID', 'N/A'),
-                            'DeploymentDate': self._format_date(env.get('deploymentDate')),
-                            'LastUpdated': self._format_date(env.get('lastUpdated')),
-                            'UpdatedBy': env.get('updatedBy', 'N/A'),
-                            'Status': env.get('status', 'UNKNOWN'),
-                            'Properties': env.get('Properties', {})
+                            'Environment': environment_id,
+                            'DeploymentDate': self._format_date(deployment_date),
+                            'LastUpdated': self._format_date(last_updated),
+                            'UpdatedBy': updated_by,
+                            'Status': status,
+                            'Properties': properties
                         }
                         rows.append(row)
                 else:
-                    # Platform without environments
+                    # Platform without environments - still try to extract data
                     row = {
                         '_id': api_id,
                         'API Name': api_name,
                         'PlatformID': platform_id,
                         'Environment': 'N/A',
-                        'DeploymentDate': 'N/A',
-                        'LastUpdated': 'N/A',
-                        'UpdatedBy': 'N/A',
-                        'Status': 'UNKNOWN',
-                        'Properties': {}
+                        'DeploymentDate': self._format_date(platform.get('deploymentDate')),
+                        'LastUpdated': self._format_date(platform.get('lastUpdated')),
+                        'UpdatedBy': platform.get('updatedBy', 'N/A'),
+                        'Status': platform.get('status', 'UNKNOWN'),
+                        'Properties': platform.get('Properties', {})
                     }
                     rows.append(row)
         
@@ -222,16 +267,17 @@ class DatabaseService:
             rows.append(row)
         else:
             # No platform data - return single row with N/A values
+            # But try to extract any available data from the root level
             row = {
                 '_id': api_id,
                 'API Name': api_name,
-                'PlatformID': 'N/A',
-                'Environment': 'N/A',
-                'DeploymentDate': 'N/A',
-                'LastUpdated': 'N/A',
-                'UpdatedBy': 'N/A',
-                'Status': 'UNKNOWN',
-                'Properties': {}
+                'PlatformID': api.get('platform', api.get('Platform', 'N/A')),
+                'Environment': api.get('environment', api.get('Environment', 'N/A')),
+                'DeploymentDate': self._format_date(api.get('deploymentDate', api.get('created_at'))),
+                'LastUpdated': self._format_date(api.get('lastUpdated', api.get('updated_at'))),
+                'UpdatedBy': api.get('updatedBy', api.get('updated_by', 'N/A')),
+                'Status': api.get('status', api.get('Status', 'UNKNOWN')),
+                'Properties': api.get('properties', api.get('Properties', {}))
             }
             rows.append(row)
         
