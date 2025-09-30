@@ -593,7 +593,7 @@ body {
     border-color: #667eea;
 }
 
-/* Properties Modal */
+/* Properties Modal - IMPROVED LAYOUT */
 .modal {
     display: none;
     position: fixed;
@@ -615,9 +615,9 @@ body {
 .modal-content {
     background: white;
     border-radius: 12px;
-    width: 90%;
-    max-width: 800px;
-    max-height: 80vh;
+    width: 95%;
+    max-width: 900px;
+    max-height: 85vh;
     display: flex;
     flex-direction: column;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
@@ -644,16 +644,18 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 20px;
+    padding: 20px 25px;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
     border-radius: 12px 12px 0 0;
+    flex-shrink: 0;
 }
 
 .modal-header h2 {
     margin: 0;
-    font-size: 1.5rem;
+    font-size: 1.4rem;
     word-break: break-word;
+    max-width: calc(100% - 40px);
 }
 
 .modal-close {
@@ -666,6 +668,12 @@ body {
     border: none;
     line-height: 1;
     flex-shrink: 0;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .modal-close:hover {
@@ -675,27 +683,28 @@ body {
 .modal-body {
     flex: 1;
     overflow-y: auto;
-    padding: 20px;
-    max-height: 50vh;
+    padding: 0;
+    max-height: calc(85vh - 140px);
 }
 
-/* Properties Container */
+/* Properties Container - BETTER ORGANIZATION */
 .properties-container {
     background: white;
     width: 100%;
 }
 
 .property-item {
-    display: grid;
-    grid-template-columns: minmax(150px, auto) 1fr;
-    gap: 15px;
-    padding: 12px;
+    display: flex;
+    flex-direction: row;
+    padding: 14px 25px;
     border-bottom: 1px solid #e9ecef;
     transition: background 0.2s;
+    min-height: 45px;
+    align-items: flex-start;
 }
 
 .property-item:hover {
-    background: #f8f9fa;
+    background: #f9fafb;
 }
 
 .property-item:last-child {
@@ -705,22 +714,52 @@ body {
 .property-key {
     font-weight: 600;
     color: #495057;
+    min-width: 180px;
+    max-width: 180px;
+    margin-right: 20px;
     word-wrap: break-word;
     overflow-wrap: break-word;
-    hyphens: auto;
-    max-width: 250px;
+    line-height: 1.4;
+    padding-top: 2px;
+    font-size: 0.9rem;
+    flex-shrink: 0;
 }
 
 .property-value {
+    flex: 1;
     color: #212529;
     word-wrap: break-word;
     overflow-wrap: break-word;
-    word-break: break-all;
-    hyphens: auto;
+    word-break: break-word;
+    line-height: 1.5;
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Courier New', monospace;
+    font-size: 0.85rem;
+    background: #f8f9fa;
+    padding: 6px 10px;
+    border-radius: 4px;
     white-space: pre-wrap;
-    max-width: 100%;
-    font-family: 'Courier New', monospace;
-    font-size: 0.9rem;
+}
+
+/* Special styling for URL values */
+.property-value-url {
+    color: #0066cc;
+    text-decoration: none;
+    word-break: break-all;
+}
+
+.property-value-url:hover {
+    text-decoration: underline;
+}
+
+/* Special styling for boolean values */
+.property-value-boolean-true {
+    color: #28a745;
+    font-weight: 600;
+}
+
+.property-value-boolean-false {
+    color: #dc3545;
+    font-weight: 600;
 }
 
 .no-properties {
@@ -731,32 +770,38 @@ body {
 }
 
 .modal-footer {
-    padding: 15px 20px;
+    padding: 15px 25px;
     background: #f8f9fa;
-    border-top: 1px solid #dee2e6;
+    border-top: 2px solid #e9ecef;
     border-radius: 0 0 12px 12px;
     display: flex;
     justify-content: flex-end;
     gap: 10px;
+    flex-shrink: 0;
 }
 
 .btn-copy, .btn-close-modal {
-    padding: 8px 16px;
+    padding: 10px 20px;
     border: none;
     border-radius: 6px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
+    font-size: 0.9rem;
 }
 
 .btn-copy {
     background: #28a745;
     color: white;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .btn-copy:hover {
     background: #218838;
     transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(40, 167, 69, 0.3);
 }
 
 .btn-close-modal {
@@ -767,6 +812,7 @@ body {
 .btn-close-modal:hover {
     background: #5a6268;
     transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(108, 117, 125, 0.3);
 }
 
 /* Loading State */
@@ -793,23 +839,47 @@ body {
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .modal-content {
-        width: 95%;
+        width: 98%;
         max-width: none;
         margin: 10px;
+        max-height: 90vh;
+    }
+    
+    .modal-header h2 {
+        font-size: 1.2rem;
+    }
+    
+    .modal-body {
+        max-height: calc(90vh - 130px);
     }
     
     .property-item {
-        grid-template-columns: 1fr;
-        gap: 5px;
+        flex-direction: column;
+        padding: 12px 15px;
     }
     
     .property-key {
-        font-size: 0.9rem;
+        min-width: 100%;
         max-width: 100%;
+        margin-right: 0;
+        margin-bottom: 8px;
+        font-size: 0.85rem;
+        color: #6c757d;
     }
     
     .property-value {
-        font-size: 0.85rem;
+        font-size: 0.82rem;
+        width: 100%;
+    }
+    
+    .modal-footer {
+        flex-direction: column-reverse;
+        padding: 12px 15px;
+    }
+    
+    .btn-copy, .btn-close-modal {
+        width: 100%;
+        padding: 12px;
     }
     
     .search-help summary {

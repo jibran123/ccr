@@ -310,17 +310,40 @@ function viewProperties(properties, apiName) {
         modalHeader.textContent = `Properties - ${apiName}`;
     }
     
-    // Build properties HTML
+    // Build properties HTML with better formatting
     if (!properties || Object.keys(properties).length === 0) {
         modalBody.innerHTML = '<div class="no-properties">No properties available</div>';
     } else {
         let propertiesHtml = '<div class="properties-container">';
         
-        for (const [key, value] of Object.entries(properties)) {
+        // Sort properties alphabetically by key
+        const sortedKeys = Object.keys(properties).sort();
+        
+        for (const key of sortedKeys) {
+            const value = properties[key];
+            let valueClass = 'property-value';
+            let displayValue = String(value);
+            
+            // Special handling for different value types
+            if (value === true || value === 'true') {
+                valueClass += ' property-value-boolean-true';
+                displayValue = 'true';
+            } else if (value === false || value === 'false') {
+                valueClass += ' property-value-boolean-false';
+                displayValue = 'false';
+            } else if (typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://'))) {
+                // URLs - make them clickable
+                displayValue = value;
+                valueClass += ' property-value-url';
+            }
+            
+            // Format the key for better display
+            const formattedKey = key.replace(/\./g, '.<wbr>').replace(/_/g, '_<wbr>');
+            
             propertiesHtml += `
                 <div class="property-item">
-                    <span class="property-key">${escapeHtml(key)}:</span>
-                    <span class="property-value">${escapeHtml(String(value))}</span>
+                    <div class="property-key">${formattedKey}:</div>
+                    <div class="${valueClass}">${escapeHtml(displayValue)}</div>
                 </div>
             `;
         }
