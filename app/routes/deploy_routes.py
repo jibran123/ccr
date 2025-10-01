@@ -3,6 +3,18 @@ from flask import Blueprint, request, jsonify, current_app
 from datetime import datetime
 import logging
 
+# Import configuration
+from app.config import (
+    get_valid_platforms,
+    get_valid_environments,
+    get_valid_statuses,
+    is_valid_platform,
+    is_valid_environment,
+    is_valid_status,
+    PLATFORM_MAPPING,
+    ENVIRONMENT_MAPPING
+)
+
 logger = logging.getLogger(__name__)
 
 bp = Blueprint('deploy', __name__, url_prefix='/api')
@@ -50,25 +62,25 @@ def deploy_api():
                 'message': 'Environment ID is required'
             }), 400
         
-        # Validate platform and environment values
-        valid_platforms = ['IP4', 'IP5', 'OpenShift', 'Kubernetes', 'Docker', 'AWS', 'Azure', 'GCP']
-        valid_environments = ['dev', 'tst', 'stg', 'prd', 'dr', 'uat', 'qa']
-        valid_statuses = ['RUNNING', 'STOPPED', 'PENDING', 'FAILED', 'DEPLOYING', 
-                         'DEPLOYED', 'UNKNOWN', 'ERROR', 'MAINTENANCE']
-        
-        if platform_id not in valid_platforms:
+        # Validate platform using config
+        if not is_valid_platform(platform_id):
+            valid_platforms = get_valid_platforms()
             return jsonify({
                 'status': 'error',
                 'message': f'Invalid platform. Must be one of: {", ".join(valid_platforms)}'
             }), 400
         
-        if environment_id not in valid_environments:
+        # Validate environment using config
+        if not is_valid_environment(environment_id):
+            valid_environments = get_valid_environments()
             return jsonify({
                 'status': 'error',
                 'message': f'Invalid environment. Must be one of: {", ".join(valid_environments)}'
             }), 400
         
-        if status not in valid_statuses:
+        # Validate status using config
+        if not is_valid_status(status):
+            valid_statuses = get_valid_statuses()
             return jsonify({
                 'status': 'error',
                 'message': f'Invalid status. Must be one of: {", ".join(valid_statuses)}'
@@ -140,9 +152,21 @@ def validate_deployment():
         
         if not data.get('platform_id'):
             errors.append('Platform is required')
+        elif not is_valid_platform(data['platform_id']):
+            valid_platforms = get_valid_platforms()
+            errors.append(f"Invalid platform. Must be one of: {', '.join(valid_platforms)}")
         
         if not data.get('environment_id'):
             errors.append('Environment is required')
+        elif not is_valid_environment(data['environment_id']):
+            valid_environments = get_valid_environments()
+            errors.append(f"Invalid environment. Must be one of: {', '.join(valid_environments)}")
+        
+        # Check status if provided
+        if 'status' in data and data['status']:
+            if not is_valid_status(data['status']):
+                valid_statuses = get_valid_statuses()
+                errors.append(f"Invalid status. Must be one of: {', '.join(valid_statuses)}")
         
         # Check properties
         if 'properties' in data:
@@ -179,38 +203,96 @@ def validate_deployment():
 
 @bp.route('/platforms', methods=['GET'])
 def get_platforms():
-    """Get list of available platforms."""
-    platforms = [
-        {'id': 'IP4', 'name': 'IP4 Platform'},
-        {'id': 'IP5', 'name': 'IP5 Platform'},
-        {'id': 'OpenShift', 'name': 'OpenShift'},
-        {'id': 'Kubernetes', 'name': 'Kubernetes'},
-        {'id': 'Docker', 'name': 'Docker'},
-        {'id': 'AWS', 'name': 'Amazon Web Services'},
-        {'id': 'Azure', 'name': 'Microsoft Azure'},
-        {'id': 'GCP', 'name': 'Google Cloud Platform'}
-    ]
-    return jsonify({'status': 'success', 'data': platforms})
+    """Get list of available platforms from config."""
+    try:
+        platforms = [
+            {
+                'id': platform_id,
+                'name': display_name
+            }
+            for platform_id, display_name in PLATFORM_MAPPING.items()
+        ]
+        
+        return jsonify({
+            'status': 'success',
+            'data': platforms,
+            'count': len(platforms)
+        })
+    except Exception as e:
+        logger.error(f"Error getting platforms: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 @bp.route('/environments', methods=['GET'])
 def get_environments():
-    """Get list of available environments."""
-    environments = [
-        {'id': 'dev', 'name': 'Development'},
-        {'id': 'tst', 'name': 'Test'},
-        {'id': 'stg', 'name': 'Staging'},
-        {'id': 'prd', 'name': 'Production'},
-        {'id': 'dr', 'name': 'Disaster Recovery'},
-        {'id': 'uat', 'name': 'User Acceptance Testing'},
-        {'id': 'qa', 'name': 'Quality Assurance'}
-    ]
-    return jsonify({'status': 'success', 'data': environments})
+    """Get list of available environments from config."""
+    try:
+        environments = [
+            {
+                'id': env_id,
+                'name': display_name
+            }
+            for env_id, display_name in ENVIRONMENT_MAPPING.items()
+        ]
+        
+        return jsonify({
+            'status': 'success',
+            'data': environments,
+            'count': len(environments)
+        })
+    except Exception as e:
+        logger.error(f"Error getting environments: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 @bp.route('/statuses', methods=['GET'])
 def get_statuses():
-    """Get list of available statuses."""
-    statuses = [
-        'RUNNING', 'STOPPED', 'PENDING', 'FAILED',
-        'DEPLOYING', 'DEPLOYED', 'UNKNOWN', 'ERROR', 'MAINTENANCE'
-    ]
-    return jsonify({'status': 'success', 'data': statuses})
+    """Get list of available statuses from config."""
+    try:
+        statuses = get_valid_statuses()
+        
+        return jsonify({
+            'status': 'success',
+            'data': statuses,
+            'count': len(statuses)
+        })
+    except Exception as e:
+        logger.error(f"Error getting statuses: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+@bp.route('/config', methods=['GET'])
+def get_deployment_config():
+    """
+    Get complete deployment configuration.
+    Useful for frontend forms and validation.
+    """
+    try:
+        config = {
+            'platforms': [
+                {'id': pid, 'name': name} 
+                for pid, name in PLATFORM_MAPPING.items()
+            ],
+            'environments': [
+                {'id': eid, 'name': name} 
+                for eid, name in ENVIRONMENT_MAPPING.items()
+            ],
+            'statuses': get_valid_statuses()
+        }
+        
+        return jsonify({
+            'status': 'success',
+            'data': config
+        })
+    except Exception as e:
+        logger.error(f"Error getting config: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
