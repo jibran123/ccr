@@ -24,9 +24,10 @@ class DeploymentService:
                   status: str, updated_by: str, properties: Dict[str, Any]) -> Dict[str, Any]:
         """
         Deploy or update an API using upsert logic.
+        Uses API name as the document _id for better performance and readability.
         
         Args:
-            api_name: Name of the API
+            api_name: Name of the API (used as _id)
             platform_id: Platform identifier
             environment_id: Environment identifier
             status: Deployment status
@@ -43,15 +44,16 @@ class DeploymentService:
             now = datetime.utcnow()
             now_str = now.isoformat() + 'Z'
             
-            # Check if API already exists
-            existing_api = self.collection.find_one({'API Name': api_name})
+            # Check if API already exists (using api_name as _id)
+            existing_api = self.collection.find_one({'_id': api_name})
             
             if not existing_api:
-                # Create new API document
+                # Create new API document with api_name as _id
                 logger.info(f"Creating new API: {api_name}")
                 
                 new_doc = {
-                    'API Name': api_name,
+                    '_id': api_name,  # Use API name as _id
+                    'API Name': api_name,  # Keep for backward compatibility and readability
                     'Platform': [
                         {
                             'PlatformID': platform_id,
@@ -105,7 +107,7 @@ class DeploymentService:
                     logger.info(f"Adding new platform {platform_id} to API {api_name}")
                     
                     result = self.collection.update_one(
-                        {'API Name': api_name},
+                        {'_id': api_name},
                         {
                             '$push': {
                                 'Platform': {
@@ -157,12 +159,12 @@ class DeploymentService:
                         
                         result = self.collection.update_one(
                             {
-                                'API Name': api_name,
+                                '_id': api_name,
                                 'Platform.PlatformID': platform_id
                             },
                             {
                                 '$push': {
-                                    f'Platform.$.Environment': {
+                                    'Platform.$.Environment': {
                                         'environmentID': environment_id,
                                         'deploymentDate': now_str,
                                         'lastUpdated': now_str,
@@ -191,52 +193,27 @@ class DeploymentService:
                         # Environment exists, update it (upsert)
                         logger.info(f"Updating environment {environment_id} in platform {platform_id}")
                         
-                        # Use aggregation pipeline for complex update
+                        # Get the original deployment date from existing environment
+                        original_deployment_date = platform['Environment'][environment_index].get('deploymentDate', now_str)
+                        
+                        # Use positional operator with arrayFilters
                         result = self.collection.update_one(
-                            {'API Name': api_name},
-                            [{
+                            {
+                                '_id': api_name
+                            },
+                            {
                                 '$set': {
-                                    'Platform': {
-                                        '$map': {
-                                            'input': '$Platform',
-                                            'as': 'platform',
-                                            'in': {
-                                                '$cond': {
-                                                    'if': {'$eq': ['$$platform.PlatformID', platform_id]},
-                                                    'then': {
-                                                        '$mergeObjects': [
-                                                            '$$platform',
-                                                            {
-                                                                'Environment': {
-                                                                    '$map': {
-                                                                        'input': '$$platform.Environment',
-                                                                        'as': 'env',
-                                                                        'in': {
-                                                                            '$cond': {
-                                                                                'if': {'$eq': ['$$env.environmentID', environment_id]},
-                                                                                'then': {
-                                                                                    'environmentID': environment_id,
-                                                                                    'deploymentDate': '$$env.deploymentDate',  # Keep original
-                                                                                    'lastUpdated': now_str,
-                                                                                    'updatedBy': updated_by,
-                                                                                    'status': status,
-                                                                                    'Properties': properties
-                                                                                },
-                                                                                'else': '$$env'
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
-                                                        ]
-                                                    },
-                                                    'else': '$$platform'
-                                                }
-                                            }
-                                        }
-                                    }
+                                    'Platform.$[p].Environment.$[e].lastUpdated': now_str,
+                                    'Platform.$[p].Environment.$[e].updatedBy': updated_by,
+                                    'Platform.$[p].Environment.$[e].status': status,
+                                    'Platform.$[p].Environment.$[e].Properties': properties,
+                                    'Platform.$[p].Environment.$[e].deploymentDate': original_deployment_date
                                 }
-                            }]
+                            },
+                            array_filters=[
+                                {'p.PlatformID': platform_id},
+                                {'e.environmentID': environment_id}
+                            ]
                         )
                         
                         if result.modified_count > 0:
@@ -267,7 +244,7 @@ class DeploymentService:
         Get the current status of a specific deployment.
         
         Args:
-            api_name: API name
+            api_name: API name (used as _id)
             platform_id: Platform ID
             environment_id: Environment ID
             
@@ -275,7 +252,8 @@ class DeploymentService:
             Deployment details or None if not found
         """
         try:
-            api = self.collection.find_one({'API Name': api_name})
+            # Direct lookup by _id (much faster!)
+            api = self.collection.find_one({'_id': api_name})
             
             if not api:
                 return None

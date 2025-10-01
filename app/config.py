@@ -37,8 +37,12 @@ MONGO_URI = Config.MONGO_URI
 
 # Platform Mapping
 PLATFORM_MAPPING = {
+    'IP2': 'IP2 Platform',
+    'IP3': 'IP3 Platform',
     'IP4': 'IP4 Platform',
     'IP5': 'IP5 Platform',
+    'IP6': 'IP6 Platform',
+    'IP7': 'IP7 Platform',
     'OpenShift': 'OpenShift',
     'Kubernetes': 'Kubernetes',
     'Docker': 'Docker',
@@ -51,8 +55,10 @@ PLATFORM_MAPPING = {
 ENVIRONMENT_MAPPING = {
     'dev': 'Development',
     'tst': 'Test',
+    'acc': "Acceptance",
     'stg': 'Staging',
     'prd': 'Production',
+    'prd-uitwijk': 'Production Uitwijk / Fallback',
     'dr': 'Disaster Recovery',
     'uat': 'User Acceptance Testing',
     'qa': 'Quality Assurance'
@@ -61,12 +67,18 @@ ENVIRONMENT_MAPPING = {
 # Status Options
 STATUS_OPTIONS = [
     'RUNNING',
+    'STARTED',
     'STOPPED',
     'PENDING',
     'FAILED',
+    'DEPLOYMENT FAIELD',
     'DEPLOYING',
     'DEPLOYED',
     'UNKNOWN',
     'ERROR',
-    'MAINTENANCE'
+    'MAINTENANCE',
+    'UNDEPLOYING',
+    'STARTING',
+    'STOPPING',
+    'UNKNOWN'
 ]

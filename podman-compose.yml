@@ -12,7 +12,7 @@ services:
     networks:
       - ccr_network
     environment:
-      MONGO_INITDB_DATABASE: mydatabase
+      MONGO_INITDB_DATABASE: ccr
     healthcheck:
       test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/mydatabase --quiet
       interval: 10s
@@ -50,8 +50,8 @@ services:
       FLASK_ENV: production
       MONGO_HOST: mongo
       MONGO_PORT: 27017
-      MONGO_DB: mydatabase
-      MONGO_COLLECTION: APIs
+      MONGO_DB: ccr
+      MONGO_COLLECTION: apis
     volumes:
       #- ./:/app:ro:Z
       - ./logs:/app/logs:Z

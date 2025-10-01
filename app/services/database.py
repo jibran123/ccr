@@ -7,6 +7,9 @@ from bson import ObjectId
 import re
 from datetime import datetime
 
+# Import timezone utilities
+from app.utils.timezone_utils import format_datetime
+
 logger = logging.getLogger(__name__)
 
 class DatabaseService:
@@ -51,16 +54,6 @@ class DatabaseService:
             count = self.collection.count_documents({})
             logger.info(f"Collection '{self.collection_name}' contains {count} documents")
             
-            # Log a sample document structure for debugging
-            sample = self.collection.find_one({})
-            if sample:
-                logger.info(f"Sample document ID: {sample.get('_id')}")
-                # Log the structure to understand field names
-                if 'Platform' in sample and isinstance(sample['Platform'], list) and len(sample['Platform']) > 0:
-                    logger.info(f"Sample Platform structure: {list(sample['Platform'][0].keys()) if sample['Platform'] else []}")
-                    if 'Environment' in sample['Platform'][0] and len(sample['Platform'][0]['Environment']) > 0:
-                        logger.info(f"Sample Environment structure: {list(sample['Platform'][0]['Environment'][0].keys())}")
-            
         except (ConnectionFailure, ServerSelectionTimeoutError) as e:
             logger.error(f"Failed to connect to MongoDB: {str(e)}")
             raise
@@ -83,11 +76,10 @@ class DatabaseService:
             results = []
             
             for doc in cursor:
-                # Convert ObjectId to string if it's an ObjectId
-                if '_id' in doc:
-                    if isinstance(doc['_id'], ObjectId):
-                        doc['_id'] = str(doc['_id'])
-                    # If _id is already a string, keep it as is
+                # _id is now a string (API name), so no conversion needed
+                # But handle legacy documents with ObjectId just in case
+                if '_id' in doc and isinstance(doc['_id'], ObjectId):
+                    doc['_id'] = str(doc['_id'])
                 
                 # Convert any datetime objects to ISO format strings
                 doc = self._convert_dates_to_strings(doc)
@@ -107,6 +99,7 @@ class DatabaseService:
         """
         Search APIs based on advanced query syntax.
         Now handles Platform array structure and returns flattened results.
+        Optimized to search _id field (which is the API name).
         
         Args:
             query: Search query supporting multiple syntaxes
@@ -141,7 +134,7 @@ class DatabaseService:
             results = []
             
             for doc in cursor:
-                # Convert ObjectId to string if needed
+                # Handle legacy ObjectId documents
                 if '_id' in doc and isinstance(doc['_id'], ObjectId):
                     doc['_id'] = str(doc['_id'])
                 
@@ -160,23 +153,21 @@ class DatabaseService:
             logger.error(f"Search error: {str(e)}", exc_info=True)
             return []
     
-    def search_apis_platform_array(self, query: str, regex: bool = False, 
-                                  case_sensitive: bool = False, limit: int = 100) -> List[Dict[str, Any]]:
-        """
-        Search APIs with Platform array structure.
-        Returns flattened results for table display.
-        """
-        return self.search_apis(query, regex, case_sensitive, limit)
-    
     def _flatten_api_document(self, api: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
         Flatten API document with Platform array into table rows.
         Each platform-environment combination becomes a row.
-        Enhanced to handle various field name formats.
+        _id is now the API name (string).
+        Dates are formatted in local timezone (CET/CEST).
         """
         rows = []
-        api_name = api.get('API Name', api.get('api_name', api.get('apiName', 'N/A')))
-        api_id = str(api.get('_id', '')) if api.get('_id') else ''
+        
+        # _id is now the API name
+        api_name = api.get('_id', api.get('API Name', 'N/A'))
+        
+        # Also support legacy "API Name" field
+        if api_name == 'N/A' and 'API Name' in api:
+            api_name = api['API Name']
         
         # Check if Platform is an array (new structure)
         if 'Platform' in api and isinstance(api['Platform'], list) and len(api['Platform']) > 0:
@@ -225,7 +216,7 @@ class DatabaseService:
                                     env.get('attributes') or {})
                         
                         row = {
-                            '_id': api_id,
+                            '_id': api_name,
                             'API Name': api_name,
                             'PlatformID': platform_id,
                             'Environment': environment_id,
@@ -237,9 +228,9 @@ class DatabaseService:
                         }
                         rows.append(row)
                 else:
-                    # Platform without environments - still try to extract data
+                    # Platform without environments
                     row = {
-                        '_id': api_id,
+                        '_id': api_name,
                         'API Name': api_name,
                         'PlatformID': platform_id,
                         'Environment': 'N/A',
@@ -254,7 +245,7 @@ class DatabaseService:
         # Handle old structure (Platform as string) - for backward compatibility
         elif 'Platform' in api and isinstance(api['Platform'], str):
             row = {
-                '_id': api_id,
+                '_id': api_name,
                 'API Name': api_name,
                 'PlatformID': api.get('Platform', 'N/A'),
                 'Environment': api.get('Environment', 'N/A'),
@@ -266,10 +257,9 @@ class DatabaseService:
             }
             rows.append(row)
         else:
-            # No platform data - return single row with N/A values
-            # But try to extract any available data from the root level
+            # No platform data - return single row with available data
             row = {
-                '_id': api_id,
+                '_id': api_name,
                 'API Name': api_name,
                 'PlatformID': api.get('platform', api.get('Platform', 'N/A')),
                 'Environment': api.get('environment', api.get('Environment', 'N/A')),
@@ -284,24 +274,28 @@ class DatabaseService:
         return rows
     
     def _format_date(self, date_value):
-        """Format date for display."""
+        """
+        Format date for display in local timezone (CET/CEST).
+        Automatically handles daylight saving time transitions.
+        
+        Args:
+            date_value: Date value (datetime object, ISO string, or None)
+            
+        Returns:
+            Formatted date string in CET/CEST with timezone abbreviation
+        """
         if not date_value:
             return 'N/A'
-        if isinstance(date_value, datetime):
-            return date_value.strftime('%Y-%m-%d %H:%M:%S')
-        elif isinstance(date_value, str):
-            # Try to parse ISO format
-            try:
-                dt = datetime.fromisoformat(date_value.replace('Z', '+00:00'))
-                return dt.strftime('%Y-%m-%d %H:%M:%S')
-            except:
-                return date_value
-        return str(date_value)
+        
+        # Use timezone utility to format
+        # This automatically converts UTC to CET/CEST
+        return format_datetime(date_value, include_timezone=True)
     
     def _build_search_filter(self, query: str, regex: bool, case_sensitive: bool) -> Dict:
         """
         Build MongoDB filter from search query.
         Updated to handle Platform array structure.
+        Now searches _id field (which is the API name).
         
         Supports:
         1. Simple text search: "blue"
@@ -345,6 +339,7 @@ class DatabaseService:
         """
         Parse a single search condition.
         Updated to handle Platform array structure.
+        _id field is now searchable (contains API name).
         
         Returns MongoDB filter for this condition.
         """
@@ -372,14 +367,18 @@ class DatabaseService:
         
         # Check for attribute searches
         attribute_patterns = {
-            'API NAME': 'API Name',
-            'Platform': 'Platform.PlatformID',  # Updated for array
-            'Environment': 'Platform.Environment.environmentID',  # Updated for array
-            'Status': 'Platform.Environment.status',  # Updated for array
-            'UpdatedBy': 'Platform.Environment.updatedBy'  # Updated for array
+            'API NAME': ['_id', 'API Name'],
+            'Platform': 'Platform.PlatformID',
+            'Environment': 'Platform.Environment.environmentID',
+            'Status': 'Platform.Environment.status',
+            'UpdatedBy': 'Platform.Environment.updatedBy'
         }
         
-        for attr_name, field_path in attribute_patterns.items():
+        for attr_name, field_paths in attribute_patterns.items():
+            # Make field_paths always a list for uniform handling
+            if isinstance(field_paths, str):
+                field_paths = [field_paths]
+            
             # Check if condition matches "AttributeName = value"
             pattern = rf'{re.escape(attr_name)}\s*=\s*(.+)'
             match = re.match(pattern, condition, re.IGNORECASE)
@@ -387,16 +386,12 @@ class DatabaseService:
                 value = match.group(1).strip()
                 logger.info(f"Attribute search: {attr_name} = '{value}'")
                 
-                # Build appropriate filter based on field path
-                if 'Platform.Environment.' in field_path:
-                    # For nested array fields, use basic matching
-                    return {field_path: value}
-                elif field_path == 'Platform.PlatformID':
-                    # Search in array
-                    return {'Platform.PlatformID': value}
-                else:
-                    # Direct field match
-                    return {field_path: value}
+                # Build $or query for all field paths
+                or_conditions = []
+                for field_path in field_paths:
+                    or_conditions.append({field_path: value})
+                
+                return {'$or': or_conditions} if len(or_conditions) > 1 else or_conditions[0]
         
         # If no special syntax matched, treat as simple text search
         logger.info(f"Text search: '{condition}'")
@@ -407,8 +402,8 @@ class DatabaseService:
             pattern = re.compile(condition, flags)
             return {
                 '$or': [
-                    {'API Name': {'$regex': pattern}},
                     {'_id': {'$regex': pattern}},
+                    {'API Name': {'$regex': pattern}},
                     {'Platform.PlatformID': {'$regex': pattern}},
                     {'Platform.Environment.environmentID': {'$regex': pattern}},
                     {'Platform.Environment.status': {'$regex': pattern}},
@@ -424,8 +419,8 @@ class DatabaseService:
             options = '' if case_sensitive else 'i'
             return {
                 '$or': [
-                    {'API Name': {'$regex': re.escape(condition), '$options': options}},
                     {'_id': {'$regex': re.escape(condition), '$options': options}},
+                    {'API Name': {'$regex': re.escape(condition), '$options': options}},
                     {'Platform.PlatformID': {'$regex': re.escape(condition), '$options': options}},
                     {'Platform.Environment.environmentID': {'$regex': re.escape(condition), '$options': options}},
                     {'Platform.Environment.status': {'$regex': re.escape(condition), '$options': options}},
@@ -466,7 +461,7 @@ class DatabaseService:
         try:
             total_count = self.collection.count_documents({})
             
-            # Get unique platforms (handle both old and new structure)
+            # Get unique platforms
             pipeline = [
                 {'$project': {
                     'platforms': {
@@ -487,7 +482,7 @@ class DatabaseService:
             platform_result = list(self.collection.aggregate(pipeline))
             platforms = platform_result[0]['unique_platforms'] if platform_result else []
             
-            # Get unique environments (handle both old and new structure)
+            # Get unique environments
             env_pipeline = [
                 {'$project': {
                     'environments': {
