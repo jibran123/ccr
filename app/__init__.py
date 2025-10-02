@@ -1,7 +1,7 @@
 """Flask application factory."""
 import logging
 from flask import Flask
-from flask_cors import CORS
+from flask_CORS import CORS
 from app.config import Config
 from app.services.database import DatabaseService
 from app.utils.exceptions import register_error_handlers
@@ -36,18 +36,13 @@ def create_app(config_class=Config):
     )
     
     # Register blueprints - imports MUST be inside function to avoid circular imports
-    # Only import routes that actually exist
-    from app.routes import api_routes, health_routes, main_routes, deploy_routes
+    from app.routes import api_routes, health_routes, main_routes, deploy_routes, update_routes
     
     app.register_blueprint(main_routes.bp)
     app.register_blueprint(api_routes.bp)
     app.register_blueprint(health_routes.bp)
     app.register_blueprint(deploy_routes.bp)
-    
-    # Note: update_routes doesn't exist yet - don't import it
-    # When you create update_routes.py, add this:
-    # from app.routes import update_routes
-    # app.register_blueprint(update_routes.bp)
+    app.register_blueprint(update_routes.bp)  # Add this line
     
     # Register error handlers
     register_error_handlers(app)
@@ -55,5 +50,6 @@ def create_app(config_class=Config):
     logger.info("Application initialized successfully")
     logger.info(f"Database: {app.config['MONGO_DB']}, Collection: {app.config['MONGO_COLLECTION']}")
     logger.info("Deploy API endpoint available at: POST /api/deploy")
+    logger.info("Update API endpoints available at: PUT/PATCH/DELETE /api/apis/...")
     
     return app
