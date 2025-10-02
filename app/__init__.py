@@ -1,7 +1,7 @@
 """Flask application factory."""
 import logging
 from flask import Flask
-from flask_CORS import CORS
+from flask_cors import CORS
 from app.config import Config
 from app.services.database import DatabaseService
 from app.utils.exceptions import register_error_handlers
