@@ -255,19 +255,3 @@ def export_data():
             'status': 'error',
             'message': str(e)
         }), 500
-
-@bp.route('/health', methods=['GET'])
-def health_check():
-    """Health check endpoint."""
-    try:
-        health = current_app.db_service.health_check()
-        status_code = 200 if health['status'] == 'healthy' else 503
-        
-        return jsonify(health), status_code
-        
-    except Exception as e:
-        logger.error(f"Health check error: {str(e)}")
-        return jsonify({
-            'status': 'unhealthy',
-            'error': str(e)
-        }), 503
