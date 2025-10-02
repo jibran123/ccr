@@ -238,6 +238,239 @@ class DeploymentService:
                 'action': 'error'
             }
     
+    def update_deployment_full(self, api_name: str, platform_id: str, 
+                              environment_id: str, status: str, updated_by: str,
+                              properties: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Full update (PUT) - Replaces the entire deployment.
+        Same as deploy_api but with clear semantics for updates.
+        
+        Args:
+            api_name: API name
+            platform_id: Platform ID
+            environment_id: Environment ID
+            status: New status
+            updated_by: User making the update
+            properties: Complete new properties (replaces old)
+            
+        Returns:
+            Result dictionary
+        """
+        return self.deploy_api(api_name, platform_id, environment_id, 
+                              status, updated_by, properties)
+    
+    def update_deployment_partial(self, api_name: str, platform_id: str, 
+                                 environment_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Partial update (PATCH) - Updates only specified fields.
+        Merges updates with existing data.
+        
+        Args:
+            api_name: API name
+            platform_id: Platform ID
+            environment_id: Environment ID
+            updates: Dictionary with fields to update (status, updatedBy, properties)
+            
+        Returns:
+            Result dictionary
+        """
+        try:
+            logger.info(f"Partial update for {api_name} on {platform_id}/{environment_id}")
+            
+            # Check if deployment exists
+            existing = self.get_deployment_status(api_name, platform_id, environment_id)
+            if not existing:
+                return {
+                    'success': False,
+                    'message': f'Deployment not found: {api_name} on {platform_id}/{environment_id}',
+                    'action': 'not_found'
+                }
+            
+            # Build update document
+            now_str = datetime.utcnow().isoformat() + 'Z'
+            set_updates = {
+                'Platform.$[p].Environment.$[e].lastUpdated': now_str
+            }
+            
+            # Add status if provided
+            if 'status' in updates:
+                set_updates['Platform.$[p].Environment.$[e].status'] = updates['status']
+            
+            # Add updatedBy if provided
+            if 'updated_by' in updates or 'updatedBy' in updates:
+                set_updates['Platform.$[p].Environment.$[e].updatedBy'] = updates.get('updated_by', updates.get('updatedBy'))
+            
+            # Handle properties - merge with existing
+            if 'properties' in updates:
+                # Get existing properties
+                existing_props = existing.get('properties', {})
+                
+                # Merge with new properties
+                merged_props = {**existing_props, **updates['properties']}
+                set_updates['Platform.$[p].Environment.$[e].Properties'] = merged_props
+            
+            # Perform update
+            result = self.collection.update_one(
+                {'_id': api_name},
+                {'$set': set_updates},
+                array_filters=[
+                    {'p.PlatformID': platform_id},
+                    {'e.environmentID': environment_id}
+                ]
+            )
+            
+            if result.modified_count > 0:
+                return {
+                    'success': True,
+                    'message': f'Partially updated deployment for {api_name} on {platform_id}/{environment_id}',
+                    'action': 'updated',
+                    'modified_fields': list(updates.keys())
+                }
+            else:
+                return {
+                    'success': True,
+                    'message': f'No changes needed for {api_name} on {platform_id}/{environment_id}',
+                    'action': 'unchanged'
+                }
+                
+        except Exception as e:
+            logger.error(f"Partial update error: {str(e)}", exc_info=True)
+            return {
+                'success': False,
+                'message': f'Partial update failed: {str(e)}',
+                'action': 'error'
+            }
+    
+    def update_status_only(self, api_name: str, platform_id: str, 
+                          environment_id: str, status: str, updated_by: str) -> Dict[str, Any]:
+        """
+        Update only the status of a deployment.
+        Useful for status changes without touching properties.
+        
+        Args:
+            api_name: API name
+            platform_id: Platform ID
+            environment_id: Environment ID
+            status: New status
+            updated_by: User making the update
+            
+        Returns:
+            Result dictionary
+        """
+        return self.update_deployment_partial(
+            api_name, platform_id, environment_id,
+            {'status': status, 'updated_by': updated_by}
+        )
+    
+    def update_properties_only(self, api_name: str, platform_id: str, 
+                              environment_id: str, properties: Dict[str, Any],
+                              updated_by: str) -> Dict[str, Any]:
+        """
+        Update only the properties of a deployment.
+        Merges with existing properties.
+        
+        Args:
+            api_name: API name
+            platform_id: Platform ID
+            environment_id: Environment ID
+            properties: Properties to add/update
+            updated_by: User making the update
+            
+        Returns:
+            Result dictionary
+        """
+        return self.update_deployment_partial(
+            api_name, platform_id, environment_id,
+            {'properties': properties, 'updated_by': updated_by}
+        )
+    
+    def delete_deployment(self, api_name: str, platform_id: str, 
+                         environment_id: str) -> Dict[str, Any]:
+        """
+        Delete a specific deployment (remove environment from platform).
+        
+        Args:
+            api_name: API name
+            platform_id: Platform ID
+            environment_id: Environment ID
+            
+        Returns:
+            Result dictionary
+        """
+        try:
+            logger.info(f"Deleting deployment: {api_name} on {platform_id}/{environment_id}")
+            
+            # Check if deployment exists
+            existing = self.get_deployment_status(api_name, platform_id, environment_id)
+            if not existing:
+                return {
+                    'success': False,
+                    'message': f'Deployment not found: {api_name} on {platform_id}/{environment_id}',
+                    'action': 'not_found'
+                }
+            
+            # Remove the environment from the platform
+            result = self.collection.update_one(
+                {
+                    '_id': api_name,
+                    'Platform.PlatformID': platform_id
+                },
+                {
+                    '$pull': {
+                        'Platform.$.Environment': {'environmentID': environment_id}
+                    }
+                }
+            )
+            
+            if result.modified_count > 0:
+                # Check if platform now has no environments
+                api_doc = self.collection.find_one({'_id': api_name})
+                
+                if api_doc and 'Platform' in api_doc:
+                    for platform in api_doc['Platform']:
+                        if platform.get('PlatformID') == platform_id:
+                            if not platform.get('Environment') or len(platform.get('Environment', [])) == 0:
+                                # Remove empty platform
+                                self.collection.update_one(
+                                    {'_id': api_name},
+                                    {'$pull': {'Platform': {'PlatformID': platform_id}}}
+                                )
+                                logger.info(f"Removed empty platform {platform_id}")
+                            break
+                
+                # Check if API now has no platforms
+                api_doc = self.collection.find_one({'_id': api_name})
+                if api_doc and (not api_doc.get('Platform') or len(api_doc.get('Platform', [])) == 0):
+                    # Delete the entire API document
+                    self.collection.delete_one({'_id': api_name})
+                    logger.info(f"Deleted API {api_name} - no deployments remaining")
+                    
+                    return {
+                        'success': True,
+                        'message': f'Deleted last deployment for {api_name} - API removed',
+                        'action': 'deleted_api'
+                    }
+                
+                return {
+                    'success': True,
+                    'message': f'Deleted deployment {api_name} on {platform_id}/{environment_id}',
+                    'action': 'deleted'
+                }
+            else:
+                return {
+                    'success': False,
+                    'message': 'Failed to delete deployment',
+                    'action': 'failed'
+                }
+                
+        except Exception as e:
+            logger.error(f"Delete error: {str(e)}", exc_info=True)
+            return {
+                'success': False,
+                'message': f'Delete failed: {str(e)}',
+                'action': 'error'
+            }
+    
     def get_deployment_status(self, api_name: str, platform_id: str, 
                             environment_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -275,6 +508,7 @@ class DeploymentService:
                             'platform': platform_id,
                             'environment': environment_id,
                             'status': env.get('status'),
+                            'deployment_date': env.get('deploymentDate'),
                             'last_updated': env.get('lastUpdated'),
                             'updated_by': env.get('updatedBy'),
                             'properties': env.get('Properties', {})
