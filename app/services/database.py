@@ -99,12 +99,17 @@ class DatabaseService:
         """
         Search APIs based on advanced query syntax.
         Now handles Platform array structure and returns flattened results.
-        Optimized to search _id field (which is the API name).
+        
+        Search Rules:
+        1. Simple text (e.g., "blue") - Partial match, case insensitive, all fields EXCEPT Properties
+        2. Attribute search (e.g., "Platform = IP4") - Exact match, case sensitive
+        3. Properties search (e.g., "Properties : key = value") - Exact match, case sensitive
+        4. AND/OR operators for combining conditions
         
         Args:
             query: Search query supporting multiple syntaxes
-            regex: Use regex for text searches
-            case_sensitive: Case sensitivity for text searches
+            regex: Use regex for text searches (from UI checkbox)
+            case_sensitive: Case sensitivity for text searches (from UI checkbox)
             limit: Maximum results
             
         Returns:
@@ -153,13 +158,230 @@ class DatabaseService:
             logger.error(f"Search error: {str(e)}", exc_info=True)
             return []
     
+    def _build_search_filter(self, query: str, regex: bool, case_sensitive: bool) -> Dict:
+        """
+        Build MongoDB filter from search query.
+        
+        Supports:
+        1. Simple text search: "blue" (partial, case insensitive, excludes Properties)
+        2. Attribute search: "Platform = IP4" (exact, case sensitive)
+        3. Properties search: "Properties : key = value" (exact, case sensitive)
+        4. Combined with AND/OR
+        
+        Args:
+            query: Search query string
+            regex: Enable regex mode (from UI)
+            case_sensitive: Enable case sensitivity for simple text search (from UI)
+            
+        Returns:
+            MongoDB filter dictionary
+        """
+        # Split by AND/OR to get individual conditions
+        # Use regex to preserve AND/OR as separate tokens
+        parts = re.split(r'\s+(AND|OR)\s+', query, flags=re.IGNORECASE)
+        
+        conditions = []
+        operators = []
+        
+        for part in parts:
+            part_upper = part.strip().upper()
+            
+            if part_upper in ['AND', 'OR']:
+                operators.append(part_upper)
+            elif part.strip():
+                # Build filter for this part
+                condition_filter = self._parse_single_condition(part.strip(), regex, case_sensitive)
+                if condition_filter:
+                    conditions.append(condition_filter)
+                    logger.info(f"Parsed condition '{part.strip()}' -> {condition_filter}")
+        
+        # Combine conditions
+        if not conditions:
+            return {}
+        
+        if len(conditions) == 1:
+            return conditions[0]
+        
+        # Combine based on operators
+        # If we have mixed AND/OR, we need to be careful
+        # For now, if ANY OR exists, use $or for all (simple approach)
+        # Better approach: respect operator precedence, but that's complex
+        
+        if 'OR' in operators:
+            # If there's at least one OR, use $or for all conditions
+            return {'$or': conditions}
+        else:
+            # All AND operators
+            return {'$and': conditions}
+    
+    def _parse_single_condition(self, condition: str, regex: bool, case_sensitive: bool) -> Optional[Dict]:
+        """
+        Parse a single search condition into a MongoDB filter.
+        
+        Three types:
+        1. Properties search: "Properties : key = value" (exact, case sensitive)
+        2. Attribute search: "Field = value" (exact, case sensitive)
+        3. Simple text: "searchterm" (partial, case insensitive by default)
+        
+        Returns:
+            MongoDB filter dictionary
+        """
+        condition = condition.strip()
+        
+        # TYPE 1: Properties search - "Properties : key = value"
+        if re.match(r'Properties\s*:', condition, re.IGNORECASE):
+            return self._parse_properties_condition(condition)
+        
+        # TYPE 2: Attribute search - "Field = value"
+        if '=' in condition:
+            return self._parse_attribute_condition(condition)
+        
+        # TYPE 3: Simple text search - "searchterm"
+        return self._parse_simple_text_condition(condition, regex, case_sensitive)
+    
+    def _parse_properties_condition(self, condition: str) -> Optional[Dict]:
+        """
+        Parse Properties condition: "Properties : key = value"
+        
+        Rules:
+        - Exact match only (no partial text)
+        - Case sensitive
+        - Searches within Properties object only
+        
+        Example: "Properties : debug.logging = true"
+        """
+        # Extract: Properties : key = value
+        match = re.match(r'Properties\s*:\s*([^=]+?)\s*=\s*(.+)', condition, re.IGNORECASE)
+        
+        if not match:
+            logger.warning(f"Invalid Properties syntax: {condition}")
+            return None
+        
+        key = match.group(1).strip()
+        value = match.group(2).strip()
+        
+        # Remove quotes if present
+        value = value.strip('"').strip("'")
+        
+        logger.info(f"Properties search - Key: '{key}', Value: '{value}' (exact, case sensitive)")
+        
+        # Search in nested Properties within Platform array
+        return {
+            'Platform.Environment.Properties.' + key: value
+        }
+    
+    def _parse_attribute_condition(self, condition: str) -> Optional[Dict]:
+        """
+        Parse attribute condition: "Field = value"
+        
+        Rules:
+        - Exact match only (no partial text)
+        - Case sensitive
+        - Searches specific attribute
+        
+        Examples: 
+        - "Platform = IP4"
+        - "Environment = prd"
+        - "API Name = ivp-test-app"
+        """
+        # Extract: Field = value
+        parts = condition.split('=', 1)
+        if len(parts) != 2:
+            return None
+        
+        field = parts[0].strip()
+        value = parts[1].strip()
+        
+        # Remove quotes if present
+        value = value.strip('"').strip("'")
+        
+        logger.info(f"Attribute search - Field: '{field}', Value: '{value}' (exact, case sensitive)")
+        
+        # Map attribute names to MongoDB fields
+        field_mapping = {
+            'API NAME': ['_id', 'API Name'],
+            'PLATFORM': 'Platform.PlatformID',
+            'ENVIRONMENT': 'Platform.Environment.environmentID',
+            'STATUS': 'Platform.Environment.status',
+            'UPDATEDBY': 'Platform.Environment.updatedBy',
+            'VERSION': 'Platform.Environment.version'
+        }
+        
+        field_upper = field.upper().replace(' ', '')
+        
+        if field_upper in field_mapping:
+            field_paths = field_mapping[field_upper]
+            
+            # Make field_paths always a list
+            if isinstance(field_paths, str):
+                field_paths = [field_paths]
+            
+            # Build exact match query
+            if len(field_paths) == 1:
+                return {field_paths[0]: value}
+            else:
+                # Multiple possible fields (e.g., _id or API Name)
+                return {'$or': [{fp: value} for fp in field_paths]}
+        
+        # Unknown field - return None
+        logger.warning(f"Unknown attribute field: {field}")
+        return None
+    
+    def _parse_simple_text_condition(self, condition: str, regex: bool, case_sensitive: bool) -> Optional[Dict]:
+        """
+        Parse simple text search: "searchterm"
+        
+        Rules:
+        - Partial match (contains)
+        - Case insensitive by default (unless case_sensitive checkbox is enabled)
+        - Searches ALL fields EXCEPT Properties
+        
+        Example: "blue" searches for "blue" in API Name, Platform, Environment, Status, etc.
+        """
+        search_text = condition.strip()
+        
+        logger.info(f"Simple text search: '{search_text}' (partial, case_sensitive={case_sensitive})")
+        
+        # Fields to search (EXCLUDE Properties)
+        search_fields = [
+            '_id',
+            'API Name',
+            'Platform.PlatformID',
+            'Platform.Environment.environmentID',
+            'Platform.Environment.status',
+            'Platform.Environment.updatedBy',
+            'Platform.Environment.version'
+        ]
+        
+        if regex:
+            # Use as regex pattern
+            try:
+                flags = 0 if case_sensitive else re.IGNORECASE
+                pattern = re.compile(search_text, flags)
+                
+                return {
+                    '$or': [
+                        {field: {'$regex': pattern}} for field in search_fields
+                    ]
+                }
+            except re.error:
+                # Invalid regex, fall back to literal search
+                logger.warning(f"Invalid regex pattern: {search_text}")
+        
+        # Regular search - case insensitive contains
+        options = '' if case_sensitive else 'i'
+        
+        return {
+            '$or': [
+                {field: {'$regex': re.escape(search_text), '$options': options}}
+                for field in search_fields
+            ]
+        }
+    
     def _flatten_api_document(self, api: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
         Flatten API document with Platform array into table rows.
         Each platform-environment combination becomes a row.
-        _id is now the API name (string).
-        Dates are formatted in local timezone (CET/CEST).
-        Version is extracted from Environment level (not Properties).
         """
         rows = []
         
@@ -187,7 +409,7 @@ class DatabaseService:
                                         env.get('environmentId') or 
                                         env.get('environment') or 'N/A')
                         
-                        # Extract version from environment level (not from Properties!)
+                        # Extract version from environment level
                         version = (env.get('version') or 
                                   env.get('Version') or 
                                   env.get('api_version') or 
@@ -295,171 +517,15 @@ class DatabaseService:
     def _format_date(self, date_value):
         """
         Format date for display in local timezone (CET/CEST).
-        Automatically handles daylight saving time transitions.
-        
-        Args:
-            date_value: Date value (datetime object, ISO string, or None)
-            
-        Returns:
-            Formatted date string in CET/CEST with timezone abbreviation
         """
         if not date_value:
             return 'N/A'
         
-        # Use timezone utility to format
-        # This automatically converts UTC to CET/CEST
         return format_datetime(date_value, include_timezone=True)
-    
-    def _build_search_filter(self, query: str, regex: bool, case_sensitive: bool) -> Dict:
-        """
-        Build MongoDB filter from search query.
-        Updated to handle Platform array structure.
-        Now searches _id field (which is the API name).
-        
-        Supports:
-        1. Simple text search: "blue"
-        2. Attribute search: "Platform = IP4"
-        3. Properties search: "Properties : key = value"
-        4. Combined with AND/OR
-        """
-        # Split by AND/OR to get individual conditions
-        parts = re.split(r'\s+(AND|OR)\s+', query)
-        
-        conditions = []
-        operators = []
-        
-        for part in parts:
-            part = part.strip()
-            
-            if part in ['AND', 'OR']:
-                operators.append(part)
-            elif part:
-                # Build filter for this part
-                condition_filter = self._parse_single_condition(part, regex, case_sensitive)
-                if condition_filter:
-                    conditions.append(condition_filter)
-                    logger.info(f"Condition '{part}' -> {condition_filter}")
-        
-        # Combine conditions
-        if not conditions:
-            return {}
-        
-        if len(conditions) == 1:
-            return conditions[0]
-        
-        # If any OR operator exists, use $or for all
-        # Otherwise use $and
-        if 'OR' in operators:
-            return {'$or': conditions}
-        else:
-            return {'$and': conditions}
-    
-    def _parse_single_condition(self, condition: str, regex: bool, case_sensitive: bool) -> Optional[Dict]:
-        """
-        Parse a single search condition.
-        Updated to handle Platform array structure.
-        _id field is now searchable (contains API name).
-        
-        Returns MongoDB filter for this condition.
-        """
-        condition = condition.strip()
-        
-        # Check for Properties search
-        if re.search(r'Properties\s*:', condition, re.IGNORECASE):
-            # Extract key and value
-            match = re.match(r'Properties\s*:\s*([^=]+?)\s*=\s*(.+)', condition, re.IGNORECASE)
-            if match:
-                key = match.group(1).strip()
-                value = match.group(2).strip()
-                
-                logger.info(f"Property search: key='{key}', value='{value}'")
-                
-                # For Platform array structure, search in nested Properties
-                return {
-                    '$or': [
-                        # New structure - Platform array
-                        {'Platform.Environment.Properties.' + key: value},
-                        # Old structure - top-level Properties
-                        {'Properties.' + key: value}
-                    ]
-                }
-        
-        # Check for attribute searches
-        attribute_patterns = {
-            'API NAME': ['_id', 'API Name'],
-            'Platform': 'Platform.PlatformID',
-            'Environment': 'Platform.Environment.environmentID',
-            'Status': 'Platform.Environment.status',
-            'UpdatedBy': 'Platform.Environment.updatedBy'
-        }
-        
-        for attr_name, field_paths in attribute_patterns.items():
-            # Make field_paths always a list for uniform handling
-            if isinstance(field_paths, str):
-                field_paths = [field_paths]
-            
-            # Check if condition matches "AttributeName = value"
-            pattern = rf'{re.escape(attr_name)}\s*=\s*(.+)'
-            match = re.match(pattern, condition, re.IGNORECASE)
-            if match:
-                value = match.group(1).strip()
-                logger.info(f"Attribute search: {attr_name} = '{value}'")
-                
-                # Build $or query for all field paths
-                or_conditions = []
-                for field_path in field_paths:
-                    or_conditions.append({field_path: value})
-                
-                return {'$or': or_conditions} if len(or_conditions) > 1 else or_conditions[0]
-        
-        # If no special syntax matched, treat as simple text search
-        logger.info(f"Text search: '{condition}'")
-        
-        if regex:
-            # Use regex search
-            flags = 0 if case_sensitive else re.IGNORECASE
-            pattern = re.compile(condition, flags)
-            return {
-                '$or': [
-                    {'_id': {'$regex': pattern}},
-                    {'API Name': {'$regex': pattern}},
-                    {'Platform.PlatformID': {'$regex': pattern}},
-                    {'Platform.Environment.environmentID': {'$regex': pattern}},
-                    {'Platform.Environment.status': {'$regex': pattern}},
-                    {'Platform.Environment.updatedBy': {'$regex': pattern}},
-                    # Also search old structure
-                    {'Platform': {'$regex': pattern}},
-                    {'Environment': {'$regex': pattern}},
-                    {'Status': {'$regex': pattern}}
-                ]
-            }
-        else:
-            # Use case-insensitive contains search
-            options = '' if case_sensitive else 'i'
-            return {
-                '$or': [
-                    {'_id': {'$regex': re.escape(condition), '$options': options}},
-                    {'API Name': {'$regex': re.escape(condition), '$options': options}},
-                    {'Platform.PlatformID': {'$regex': re.escape(condition), '$options': options}},
-                    {'Platform.Environment.environmentID': {'$regex': re.escape(condition), '$options': options}},
-                    {'Platform.Environment.status': {'$regex': re.escape(condition), '$options': options}},
-                    {'Platform.Environment.updatedBy': {'$regex': re.escape(condition), '$options': options}},
-                    # Also search old structure
-                    {'Platform': {'$regex': re.escape(condition), '$options': options}},
-                    {'Environment': {'$regex': re.escape(condition), '$options': options}},
-                    {'Status': {'$regex': re.escape(condition), '$options': options}}
-                ]
-            }
     
     def _convert_dates_to_strings(self, obj):
         """
         Recursively convert datetime objects to ISO format strings.
-        
-        Args:
-            obj: Object to convert
-            
-        Returns:
-            Object with dates converted to strings
         """
         if isinstance(obj, dict):
             return {k: self._convert_dates_to_strings(v) for k, v in obj.items()}
@@ -471,12 +537,7 @@ class DatabaseService:
             return obj
     
     def get_stats(self) -> Dict[str, Any]:
-        """
-        Get database statistics.
-        
-        Returns:
-            Dictionary with statistics
-        """
+        """Get database statistics."""
         try:
             total_count = self.collection.count_documents({})
             
@@ -541,17 +602,9 @@ class DatabaseService:
             }
     
     def health_check(self) -> Dict[str, Any]:
-        """
-        Check database health.
-        
-        Returns:
-            Health status dictionary
-        """
+        """Check database health."""
         try:
-            # Ping database
             self.client.admin.command('ping')
-            
-            # Get collection stats
             count = self.collection.count_documents({})
             
             return {
