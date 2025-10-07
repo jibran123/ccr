@@ -24,6 +24,7 @@ def deploy_api():
     """
     Deploy or update an API deployment.
     Uses upsert logic for Platform array structure.
+    Now supports version field.
     """
     try:
         # Get request data
@@ -39,6 +40,7 @@ def deploy_api():
         api_name = data.get('api_name', '').strip()
         platform_id = data.get('platform_id', '').strip()
         environment_id = data.get('environment_id', '').strip()
+        version = data.get('version', '1.0.0').strip()  # Default to 1.0.0 if not provided
         status = data.get('status', 'DEPLOYING').strip()
         updated_by = data.get('updated_by', 'system').strip()
         properties = data.get('properties', {})
@@ -93,6 +95,13 @@ def deploy_api():
                 'message': 'Properties must be an object/dictionary'
             }), 400
         
+        # Validate version format (optional - can be made stricter)
+        if version and len(version) > 50:
+            return jsonify({
+                'status': 'error',
+                'message': 'Version must be 50 characters or less'
+            }), 400
+        
         # Call deployment service
         from app.services.deploy_service import DeploymentService
         deploy_service = DeploymentService(current_app.db_service)
@@ -101,13 +110,14 @@ def deploy_api():
             api_name=api_name,
             platform_id=platform_id,
             environment_id=environment_id,
+            version=version,
             status=status,
             updated_by=updated_by,
             properties=properties
         )
         
         if result['success']:
-            logger.info(f"Successfully deployed {api_name} to {platform_id}/{environment_id}")
+            logger.info(f"Successfully deployed {api_name} v{version} to {platform_id}/{environment_id}")
             return jsonify({
                 'status': 'success',
                 'message': result['message'],
@@ -115,6 +125,7 @@ def deploy_api():
                     'api_name': api_name,
                     'platform': platform_id,
                     'environment': environment_id,
+                    'version': version,
                     'action': result['action']  # 'created' or 'updated'
                 }
             }), 201 if result['action'] == 'created' else 200
@@ -167,6 +178,11 @@ def validate_deployment():
             if not is_valid_status(data['status']):
                 valid_statuses = get_valid_statuses()
                 errors.append(f"Invalid status. Must be one of: {', '.join(valid_statuses)}")
+        
+        # Check version if provided
+        if 'version' in data and data['version']:
+            if len(str(data['version'])) > 50:
+                errors.append('Version must be 50 characters or less')
         
         # Check properties
         if 'properties' in data:

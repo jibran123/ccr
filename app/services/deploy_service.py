@@ -21,15 +21,18 @@ class DeploymentService:
         self.collection = db_service.collection
     
     def deploy_api(self, api_name: str, platform_id: str, environment_id: str,
-                  status: str, updated_by: str, properties: Dict[str, Any]) -> Dict[str, Any]:
+                  version: str, status: str, updated_by: str, 
+                  properties: Dict[str, Any]) -> Dict[str, Any]:
         """
         Deploy or update an API using upsert logic.
         Uses API name as the document _id for better performance and readability.
+        Now includes version field at Environment level.
         
         Args:
             api_name: Name of the API (used as _id)
             platform_id: Platform identifier
             environment_id: Environment identifier
+            version: API version (e.g., "2.3.86")
             status: Deployment status
             updated_by: User making the deployment
             properties: Key-value properties for the deployment
@@ -38,7 +41,7 @@ class DeploymentService:
             Dictionary with success status and message
         """
         try:
-            logger.info(f"Deploying {api_name} to {platform_id}/{environment_id}")
+            logger.info(f"Deploying {api_name} v{version} to {platform_id}/{environment_id}")
             
             # Current timestamp
             now = datetime.utcnow()
@@ -60,6 +63,7 @@ class DeploymentService:
                             'Environment': [
                                 {
                                     'environmentID': environment_id,
+                                    'version': version,  # ← VERSION AT ENVIRONMENT LEVEL
                                     'deploymentDate': now_str,
                                     'lastUpdated': now_str,
                                     'updatedBy': updated_by,
@@ -76,7 +80,7 @@ class DeploymentService:
                 if result.inserted_id:
                     return {
                         'success': True,
-                        'message': f'API {api_name} created and deployed to {platform_id}/{environment_id}',
+                        'message': f'API {api_name} v{version} created and deployed to {platform_id}/{environment_id}',
                         'action': 'created',
                         'api_id': str(result.inserted_id)
                     }
@@ -115,6 +119,7 @@ class DeploymentService:
                                     'Environment': [
                                         {
                                             'environmentID': environment_id,
+                                            'version': version,  # ← VERSION
                                             'deploymentDate': now_str,
                                             'lastUpdated': now_str,
                                             'updatedBy': updated_by,
@@ -130,7 +135,7 @@ class DeploymentService:
                     if result.modified_count > 0:
                         return {
                             'success': True,
-                            'message': f'Added new platform {platform_id} with environment {environment_id} to API {api_name}',
+                            'message': f'Added new platform {platform_id} with environment {environment_id} to API {api_name} v{version}',
                             'action': 'updated'
                         }
                     else:
@@ -166,6 +171,7 @@ class DeploymentService:
                                 '$push': {
                                     'Platform.$.Environment': {
                                         'environmentID': environment_id,
+                                        'version': version,  # ← VERSION
                                         'deploymentDate': now_str,
                                         'lastUpdated': now_str,
                                         'updatedBy': updated_by,
@@ -179,7 +185,7 @@ class DeploymentService:
                         if result.modified_count > 0:
                             return {
                                 'success': True,
-                                'message': f'Added environment {environment_id} to platform {platform_id} for API {api_name}',
+                                'message': f'Added environment {environment_id} to platform {platform_id} for API {api_name} v{version}',
                                 'action': 'updated'
                             }
                         else:
@@ -203,6 +209,7 @@ class DeploymentService:
                             },
                             {
                                 '$set': {
+                                    'Platform.$[p].Environment.$[e].version': version,  # ← UPDATE VERSION
                                     'Platform.$[p].Environment.$[e].lastUpdated': now_str,
                                     'Platform.$[p].Environment.$[e].updatedBy': updated_by,
                                     'Platform.$[p].Environment.$[e].status': status,
@@ -219,14 +226,14 @@ class DeploymentService:
                         if result.modified_count > 0:
                             return {
                                 'success': True,
-                                'message': f'Updated deployment for {api_name} on {platform_id}/{environment_id}',
+                                'message': f'Updated deployment for {api_name} v{version} on {platform_id}/{environment_id}',
                                 'action': 'updated'
                             }
                         else:
                             # Even if no modification, it's still a success (idempotent)
                             return {
                                 'success': True,
-                                'message': f'Deployment for {api_name} on {platform_id}/{environment_id} is already up to date',
+                                'message': f'Deployment for {api_name} v{version} on {platform_id}/{environment_id} is already up to date',
                                 'action': 'unchanged'
                             }
             
@@ -239,8 +246,8 @@ class DeploymentService:
             }
     
     def update_deployment_full(self, api_name: str, platform_id: str, 
-                              environment_id: str, status: str, updated_by: str,
-                              properties: Dict[str, Any]) -> Dict[str, Any]:
+                              environment_id: str, version: str, status: str, 
+                              updated_by: str, properties: Dict[str, Any]) -> Dict[str, Any]:
         """
         Full update (PUT) - Replaces the entire deployment.
         Same as deploy_api but with clear semantics for updates.
@@ -249,6 +256,7 @@ class DeploymentService:
             api_name: API name
             platform_id: Platform ID
             environment_id: Environment ID
+            version: New version
             status: New status
             updated_by: User making the update
             properties: Complete new properties (replaces old)
@@ -257,7 +265,7 @@ class DeploymentService:
             Result dictionary
         """
         return self.deploy_api(api_name, platform_id, environment_id, 
-                              status, updated_by, properties)
+                              version, status, updated_by, properties)
     
     def update_deployment_partial(self, api_name: str, platform_id: str, 
                                  environment_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
@@ -269,7 +277,7 @@ class DeploymentService:
             api_name: API name
             platform_id: Platform ID
             environment_id: Environment ID
-            updates: Dictionary with fields to update (status, updatedBy, properties)
+            updates: Dictionary with fields to update (version, status, updatedBy, properties)
             
         Returns:
             Result dictionary
@@ -291,6 +299,10 @@ class DeploymentService:
             set_updates = {
                 'Platform.$[p].Environment.$[e].lastUpdated': now_str
             }
+            
+            # Add version if provided
+            if 'version' in updates:
+                set_updates['Platform.$[p].Environment.$[e].version'] = updates['version']
             
             # Add status if provided
             if 'status' in updates:
@@ -345,7 +357,7 @@ class DeploymentService:
                           environment_id: str, status: str, updated_by: str) -> Dict[str, Any]:
         """
         Update only the status of a deployment.
-        Useful for status changes without touching properties.
+        Useful for status changes without touching version or properties.
         
         Args:
             api_name: API name
@@ -360,6 +372,26 @@ class DeploymentService:
         return self.update_deployment_partial(
             api_name, platform_id, environment_id,
             {'status': status, 'updated_by': updated_by}
+        )
+    
+    def update_version_only(self, api_name: str, platform_id: str, 
+                           environment_id: str, version: str, updated_by: str) -> Dict[str, Any]:
+        """
+        Update only the version of a deployment.
+        
+        Args:
+            api_name: API name
+            platform_id: Platform ID
+            environment_id: Environment ID
+            version: New version
+            updated_by: User making the update
+            
+        Returns:
+            Result dictionary
+        """
+        return self.update_deployment_partial(
+            api_name, platform_id, environment_id,
+            {'version': version, 'updated_by': updated_by}
         )
     
     def update_properties_only(self, api_name: str, platform_id: str, 
@@ -507,6 +539,7 @@ class DeploymentService:
                             'api_name': api_name,
                             'platform': platform_id,
                             'environment': environment_id,
+                            'version': env.get('version', 'N/A'),  # ← INCLUDE VERSION
                             'status': env.get('status'),
                             'deployment_date': env.get('deploymentDate'),
                             'last_updated': env.get('lastUpdated'),

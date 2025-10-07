@@ -159,6 +159,7 @@ class DatabaseService:
         Each platform-environment combination becomes a row.
         _id is now the API name (string).
         Dates are formatted in local timezone (CET/CEST).
+        Version is extracted from Environment level (not Properties).
         """
         rows = []
         
@@ -185,6 +186,14 @@ class DatabaseService:
                                         env.get('environment_id') or 
                                         env.get('environmentId') or 
                                         env.get('environment') or 'N/A')
+                        
+                        # Extract version from environment level (not from Properties!)
+                        version = (env.get('version') or 
+                                  env.get('Version') or 
+                                  env.get('api_version') or 
+                                  env.get('apiVersion') or 
+                                  env.get('app_version') or 
+                                  env.get('appVersion') or 'N/A')
                         
                         # Try different field name formats for dates
                         deployment_date = (env.get('deploymentDate') or 
@@ -218,6 +227,7 @@ class DatabaseService:
                         row = {
                             '_id': api_name,
                             'API Name': api_name,
+                            'Version': version,
                             'PlatformID': platform_id,
                             'Environment': environment_id,
                             'DeploymentDate': self._format_date(deployment_date),
@@ -229,9 +239,12 @@ class DatabaseService:
                         rows.append(row)
                 else:
                     # Platform without environments
+                    version = platform.get('version', platform.get('Version', 'N/A'))
+                    
                     row = {
                         '_id': api_name,
                         'API Name': api_name,
+                        'Version': version,
                         'PlatformID': platform_id,
                         'Environment': 'N/A',
                         'DeploymentDate': self._format_date(platform.get('deploymentDate')),
@@ -244,9 +257,12 @@ class DatabaseService:
         
         # Handle old structure (Platform as string) - for backward compatibility
         elif 'Platform' in api and isinstance(api['Platform'], str):
+            version = api.get('version', api.get('Version', 'N/A'))
+            
             row = {
                 '_id': api_name,
                 'API Name': api_name,
+                'Version': version,
                 'PlatformID': api.get('Platform', 'N/A'),
                 'Environment': api.get('Environment', 'N/A'),
                 'DeploymentDate': self._format_date(api.get('DeploymentDate')),
@@ -258,9 +274,12 @@ class DatabaseService:
             rows.append(row)
         else:
             # No platform data - return single row with available data
+            version = api.get('version', api.get('Version', 'N/A'))
+            
             row = {
                 '_id': api_name,
                 'API Name': api_name,
+                'Version': version,
                 'PlatformID': api.get('platform', api.get('Platform', 'N/A')),
                 'Environment': api.get('environment', api.get('Environment', 'N/A')),
                 'DeploymentDate': self._format_date(api.get('deploymentDate', api.get('created_at'))),

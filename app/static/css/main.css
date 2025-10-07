@@ -891,3 +891,25 @@ body {
         padding: 20px 15px;
     }
 }
+
+/* Version Column Styling */
+.api-version {
+    font-weight: 500;
+    color: #667eea;
+    font-family: 'Courier New', monospace;
+}
+
+/* Highlight version property in modal */
+.property-key-version {
+    color: #667eea !important;
+    font-weight: 700 !important;
+}
+
+.property-item-version {
+    background: #f0f4ff !important;
+    border-left: 3px solid #667eea;
+}
+
+.property-item-version:hover {
+    background: #e6edff !important;
+}

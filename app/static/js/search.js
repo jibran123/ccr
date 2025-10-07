@@ -1,4 +1,4 @@
-// Complete search.js file with Properties Modal
+// Complete search.js file with Properties Modal and Version display
 let currentPage = 1;
 let currentPerPage = 100;
 let currentSearchQuery = '';
@@ -139,7 +139,7 @@ async function loadAPIs() {
         // Show loading state
         const tbody = document.getElementById('apiTableBody');
         if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;"><div class="loading"><div class="spinner"></div><p>Loading APIs...</p></div></td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align: center;"><div class="loading"><div class="spinner"></div><p>Loading APIs...</p></div></td></tr>';
         }
         
         // Build query parameters
@@ -174,6 +174,12 @@ async function loadAPIs() {
         
         console.log('Number of results:', allResults.length);
         
+        // Debug: Log first result to see structure
+        if (allResults.length > 0) {
+            console.log('First result structure:', allResults[0]);
+            console.log('First result Version field:', allResults[0].Version || allResults[0].version);
+        }
+        
         // Display results
         displayAPIs(allResults);
         updateResultsCount(allResults.length);
@@ -189,6 +195,55 @@ async function loadAPIs() {
     }
 }
 
+function extractVersion(api) {
+    /**
+     * Extract version from API object.
+     * Version is at the environment level (sent from backend in flattened structure).
+     */
+    
+    // Check if version is directly in the API object (from flattened structure)
+    if (api.Version) {
+        console.log('Found version in API.Version:', api.Version);
+        return api.Version;
+    }
+    
+    if (api.version) {
+        console.log('Found version in API.version:', api.version);
+        return api.version;
+    }
+    
+    // Fallback: check properties object (for backward compatibility)
+    const properties = api.Properties || api.properties;
+    if (properties && typeof properties === 'object') {
+        console.log('Checking properties for version as fallback...');
+        
+        const versionFields = [
+            'version', 'Version', 'VERSION',
+            'app.version', 'api.version',
+            'apiVersion', 'appVersion',
+            'app_version', 'api_version'
+        ];
+        
+        for (const field of versionFields) {
+            if (properties[field]) {
+                console.log(`Found version in properties['${field}']:`, properties[field]);
+                return properties[field];
+            }
+        }
+        
+        // Look for any key containing 'version'
+        for (const [key, value] of Object.entries(properties)) {
+            if (key.toLowerCase().includes('version')) {
+                console.log(`Found version in key containing 'version' ('${key}'):`, value);
+                return value;
+            }
+        }
+    }
+    
+    console.log('No version found');
+    return 'N/A';
+}
+
 function displayAPIs(apis) {
     const tbody = document.getElementById('apiTableBody');
     
@@ -200,7 +255,7 @@ function displayAPIs(apis) {
     tbody.innerHTML = '';
     
     if (!apis || apis.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="no-results">No APIs found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="no-results">No APIs found</td></tr>';
         return;
     }
     
@@ -218,6 +273,9 @@ function displayAPIs(apis) {
         const status = api.Status || api.status || 'UNKNOWN';
         const properties = api.Properties || api.properties || {};
         
+        // Extract version - pass entire API object
+        const version = extractVersion(api);
+        
         const statusClass = getStatusClass(status);
         
         // Store properties in data attribute for the modal
@@ -226,6 +284,7 @@ function displayAPIs(apis) {
         
         tr.innerHTML = `
             <td class="api-name">${escapeHtml(apiName)}</td>
+            <td class="api-version">${escapeHtml(version)}</td>
             <td>${escapeHtml(platform)}</td>
             <td>${escapeHtml(environment)}</td>
             <td>${escapeHtml(deploymentDate)}</td>
@@ -316,8 +375,16 @@ function viewProperties(properties, apiName) {
     } else {
         let propertiesHtml = '<div class="properties-container">';
         
-        // Sort properties alphabetically by key
-        const sortedKeys = Object.keys(properties).sort();
+        // Sort properties alphabetically by key, with version first if it exists
+        const sortedKeys = Object.keys(properties).sort((a, b) => {
+            // Put version fields at the top
+            const aIsVersion = a.toLowerCase().includes('version');
+            const bIsVersion = b.toLowerCase().includes('version');
+            
+            if (aIsVersion && !bIsVersion) return -1;
+            if (!aIsVersion && bIsVersion) return 1;
+            return a.localeCompare(b);
+        });
         
         for (const key of sortedKeys) {
             const value = properties[key];
@@ -337,12 +404,16 @@ function viewProperties(properties, apiName) {
                 valueClass += ' property-value-url';
             }
             
+            // Highlight version fields
+            const isVersionField = key.toLowerCase().includes('version');
+            const keyClass = isVersionField ? 'property-key property-key-version' : 'property-key';
+            
             // Format the key for better display
             const formattedKey = key.replace(/\./g, '.<wbr>').replace(/_/g, '_<wbr>');
             
             propertiesHtml += `
-                <div class="property-item">
-                    <div class="property-key">${formattedKey}:</div>
+                <div class="property-item${isVersionField ? ' property-item-version' : ''}">
+                    <div class="${keyClass}">${formattedKey}:</div>
                     <div class="${valueClass}">${escapeHtml(displayValue)}</div>
                 </div>
             `;
@@ -431,7 +502,7 @@ function changePage(page) {
 function displayError(message) {
     const tbody = document.getElementById('apiTableBody');
     if (tbody) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: red;"><i class="fas fa-exclamation-triangle"></i> ${escapeHtml(message)}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: red;"><i class="fas fa-exclamation-triangle"></i> ${escapeHtml(message)}</td></tr>`;
     }
     updateResultsCount(0);
 }
