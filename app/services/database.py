@@ -1,6 +1,6 @@
 """Database service for MongoDB operations with advanced search."""
 import logging
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 from bson import ObjectId
@@ -58,126 +58,155 @@ class DatabaseService:
             logger.error(f"Failed to connect to MongoDB: {str(e)}")
             raise
     
-    def get_all_apis(self, limit: int = 100) -> List[Dict[str, Any]]:
-        """
-        Fetch all APIs from database.
-        
-        Args:
-            limit: Maximum number of results
-            
-        Returns:
-            List of API documents
-        """
-        try:
-            logger.info(f"Fetching all APIs from '{self.db_name}.{self.collection_name}' with limit {limit}")
-            
-            # Fetch documents
-            cursor = self.collection.find({}).limit(limit)
-            results = []
-            
-            for doc in cursor:
-                # _id is now a string (API name), so no conversion needed
-                # But handle legacy documents with ObjectId just in case
-                if '_id' in doc and isinstance(doc['_id'], ObjectId):
-                    doc['_id'] = str(doc['_id'])
-                
-                # Convert any datetime objects to ISO format strings
-                doc = self._convert_dates_to_strings(doc)
-                
-                results.append(doc)
-            
-            logger.info(f"Retrieved {len(results)} APIs from collection")
-            
-            return results
-            
-        except Exception as e:
-            logger.error(f"Error fetching all APIs: {str(e)}", exc_info=True)
-            return []
-    
     def search_apis(self, query: str, regex: bool = False, 
-                   case_sensitive: bool = False, limit: int = 100) -> List[Dict[str, Any]]:
+                   case_sensitive: bool = False, limit: int = 1000) -> List[Dict[str, Any]]:
         """
-        Search APIs based on advanced query syntax.
-        Now handles Platform array structure and returns flattened results.
+        Search APIs with ROW-LEVEL filtering using MongoDB Aggregation Pipeline.
         
-        Search Rules:
-        1. Simple text (e.g., "blue") - Partial match, case insensitive, all fields EXCEPT Properties
-        2. Attribute search (e.g., "Platform = IP4") - Exact match, case sensitive
-        3. Properties search (e.g., "Properties : key = value") - Exact match, case sensitive
-        4. AND/OR operators for combining conditions
+        Search Types:
+        1. Simple text: "blue" - Word boundary, case insensitive, excludes Properties
+        2. Attribute: "Platform = IP4" - Exact match, case sensitive
+        3. Properties: "Properties : key = value" - Exact match, case sensitive
+        4. Combined: "blue AND Platform = IP4" - Row-level filtering
         
         Args:
-            query: Search query supporting multiple syntaxes
-            regex: Use regex for text searches (from UI checkbox)
-            case_sensitive: Case sensitivity for text searches (from UI checkbox)
+            query: Search query
+            regex: Unused (kept for compatibility)
+            case_sensitive: Unused (kept for compatibility)
             limit: Maximum results
             
         Returns:
-            List of matching API documents (flattened for table display)
+            List of matching deployment rows (already flattened)
         """
         try:
-            logger.info(f"=== SEARCH START ===")
-            logger.info(f"Query: '{query}'")
-            logger.info(f"Regex: {regex}, Case Sensitive: {case_sensitive}")
+            logger.info("=" * 70)
+            logger.info(f"SEARCH QUERY: '{query}'")
+            logger.info("=" * 70)
             
-            # If empty query, return all flattened
-            if not query or not query.strip():
-                apis = self.get_all_apis(limit)
-                flattened_results = []
-                for api in apis:
-                    rows = self._flatten_api_document(api)
-                    flattened_results.extend(rows)
-                return flattened_results
+            # Build aggregation pipeline
+            pipeline = self._build_aggregation_pipeline(query, limit)
             
-            # Parse and build filter
-            search_filter = self._build_search_filter(query, regex, case_sensitive)
+            logger.info("Aggregation Pipeline:")
+            for i, stage in enumerate(pipeline):
+                logger.info(f"Stage {i+1}: {stage}")
             
-            logger.info(f"Final MongoDB filter: {search_filter}")
+            # Execute aggregation
+            results = list(self.collection.aggregate(pipeline))
             
-            # Execute search
-            cursor = self.collection.find(search_filter).limit(limit)
-            results = []
+            logger.info(f"Found {len(results)} matching rows")
             
-            for doc in cursor:
-                # Handle legacy ObjectId documents
-                if '_id' in doc and isinstance(doc['_id'], ObjectId):
-                    doc['_id'] = str(doc['_id'])
+            # Format results for frontend
+            formatted_results = []
+            for row in results:
+                # Handle _id (could be ObjectId or string)
+                if '_id' in row and isinstance(row['_id'], ObjectId):
+                    row['_id'] = str(row['_id'])
                 
-                # Convert dates to strings
-                doc = self._convert_dates_to_strings(doc)
+                # Format dates
+                row['DeploymentDate'] = self._format_date(row.get('DeploymentDate'))
+                row['LastUpdated'] = self._format_date(row.get('LastUpdated'))
                 
-                # Flatten the document for table display
-                rows = self._flatten_api_document(doc)
-                results.extend(rows)
+                # Ensure all expected fields exist
+                formatted_row = {
+                    '_id': row.get('_id', 'N/A'),
+                    'API Name': row.get('API Name', 'N/A'),
+                    'Version': row.get('Version', 'N/A'),
+                    'PlatformID': row.get('PlatformID', 'N/A'),
+                    'Environment': row.get('Environment', 'N/A'),
+                    'DeploymentDate': row.get('DeploymentDate', 'N/A'),
+                    'LastUpdated': row.get('LastUpdated', 'N/A'),
+                    'UpdatedBy': row.get('UpdatedBy', 'N/A'),
+                    'Status': row.get('Status', 'UNKNOWN'),
+                    'Properties': row.get('Properties', {})
+                }
+                
+                formatted_results.append(formatted_row)
             
-            logger.info(f"Search returned {len(results)} flattened results")
-            logger.info(f"=== SEARCH END ===")
-            return results
+            logger.info("=" * 70)
+            return formatted_results
             
         except Exception as e:
             logger.error(f"Search error: {str(e)}", exc_info=True)
             return []
     
-    def _build_search_filter(self, query: str, regex: bool, case_sensitive: bool) -> Dict:
+    def _build_aggregation_pipeline(self, query: str, limit: int) -> List[Dict]:
         """
-        Build MongoDB filter from search query.
+        Build MongoDB aggregation pipeline for row-level filtering.
         
-        Supports:
-        1. Simple text search: "blue" (partial, case insensitive, excludes Properties)
-        2. Attribute search: "Platform = IP4" (exact, case sensitive)
-        3. Properties search: "Properties : key = value" (exact, case sensitive)
-        4. Combined with AND/OR
-        
-        Args:
-            query: Search query string
-            regex: Enable regex mode (from UI)
-            case_sensitive: Enable case sensitivity for simple text search (from UI)
-            
-        Returns:
-            MongoDB filter dictionary
+        Pipeline:
+        1. Unwind Platform array
+        2. Unwind Environment array
+        3. Match conditions (row-level)
+        4. Project flat structure
+        5. Limit results
         """
-        # Split by AND/OR to get individual conditions
-        # Use regex to preserve AND/OR as separate tokens
+        pipeline = []
+        
+        # Stage 1: Unwind Platform array
+        pipeline.append({
+            '$unwind': {
+                'path': '$Platform',
+                'preserveNullAndEmptyArrays': False
+            }
+        })
+        
+        # Stage 2: Unwind Environment array
+        pipeline.append({
+            '$unwind': {
+                'path': '$Platform.Environment',
+                'preserveNullAndEmptyArrays': False
+            }
+        })
+        
+        # Stage 3: Match conditions (row-level filtering)
+        if query and query.strip():
+            match_filter = self._build_row_level_filter(query)
+            if match_filter:
+                pipeline.append({'$match': match_filter})
+        
+        # Stage 4: Project flat structure for table display
+        pipeline.append({
+            '$project': {
+                '_id': 1,
+                'API Name': {
+                    '$ifNull': ['$API Name', '$_id']
+                },
+                'Version': '$Platform.Environment.version',
+                'PlatformID': '$Platform.PlatformID',
+                'Environment': '$Platform.Environment.environmentID',
+                'DeploymentDate': '$Platform.Environment.deploymentDate',
+                'LastUpdated': '$Platform.Environment.lastUpdated',
+                'UpdatedBy': '$Platform.Environment.updatedBy',
+                'Status': '$Platform.Environment.status',
+                'Properties': '$Platform.Environment.Properties'
+            }
+        })
+        
+        # Stage 5: Limit results
+        pipeline.append({'$limit': limit})
+        
+        return pipeline
+    
+    def _build_row_level_filter(self, query: str) -> Dict:
+        """
+        Build MongoDB filter for row-level matching.
+        
+        After unwinding, document structure is:
+        {
+            "_id": "api-name",
+            "API Name": "api-name",
+            "Platform": {
+                "PlatformID": "IP4",
+                "Environment": {
+                    "environmentID": "tst",
+                    "version": "1.0.0",
+                    "status": "RUNNING",
+                    "Properties": {...}
+                }
+            }
+        }
+        """
+        # Split by AND/OR
         parts = re.split(r'\s+(AND|OR)\s+', query, flags=re.IGNORECASE)
         
         conditions = []
@@ -189,69 +218,59 @@ class DatabaseService:
             if part_upper in ['AND', 'OR']:
                 operators.append(part_upper)
             elif part.strip():
-                # Build filter for this part
-                condition_filter = self._parse_single_condition(part.strip(), regex, case_sensitive)
-                if condition_filter:
-                    conditions.append(condition_filter)
-                    logger.info(f"Parsed condition '{part.strip()}' -> {condition_filter}")
+                condition = self._parse_single_condition(part.strip())
+                if condition:
+                    conditions.append(condition)
+                    logger.info(f"Parsed: '{part.strip()}' -> {condition}")
         
-        # Combine conditions
+        # No valid conditions
         if not conditions:
             return {}
         
+        # Single condition
         if len(conditions) == 1:
             return conditions[0]
         
-        # Combine based on operators
-        # If we have mixed AND/OR, we need to be careful
-        # For now, if ANY OR exists, use $or for all (simple approach)
-        # Better approach: respect operator precedence, but that's complex
-        
+        # Multiple conditions with operators
         if 'OR' in operators:
-            # If there's at least one OR, use $or for all conditions
+            # Any OR present -> use $or for all
             return {'$or': conditions}
         else:
-            # All AND operators
+            # All AND -> use $and
             return {'$and': conditions}
     
-    def _parse_single_condition(self, condition: str, regex: bool, case_sensitive: bool) -> Optional[Dict]:
+    def _parse_single_condition(self, condition: str) -> Optional[Dict]:
         """
-        Parse a single search condition into a MongoDB filter.
+        Parse single condition into MongoDB filter.
         
         Three types:
-        1. Properties search: "Properties : key = value" (exact, case sensitive)
-        2. Attribute search: "Field = value" (exact, case sensitive)
-        3. Simple text: "searchterm" (partial, case insensitive by default)
-        
-        Returns:
-            MongoDB filter dictionary
+        1. Properties: "Properties : key = value"
+        2. Attribute: "Field = value"
+        3. Simple text: "searchterm"
         """
         condition = condition.strip()
         
-        # TYPE 1: Properties search - "Properties : key = value"
+        # Type 1: Properties search
         if re.match(r'Properties\s*:', condition, re.IGNORECASE):
             return self._parse_properties_condition(condition)
         
-        # TYPE 2: Attribute search - "Field = value"
+        # Type 2: Attribute search
         if '=' in condition:
             return self._parse_attribute_condition(condition)
         
-        # TYPE 3: Simple text search - "searchterm"
-        return self._parse_simple_text_condition(condition, regex, case_sensitive)
+        # Type 3: Simple text search
+        return self._parse_simple_text_condition(condition)
     
     def _parse_properties_condition(self, condition: str) -> Optional[Dict]:
         """
-        Parse Properties condition: "Properties : key = value"
+        Parse: "Properties : key = value"
+        
+        After unwinding, Properties are at: Platform.Environment.Properties
         
         Rules:
-        - Exact match only (no partial text)
-        - Case sensitive for keys
-        - Handles type conversion for values (boolean, numbers)
-        - Searches within Properties object only
-        
-        Example: "Properties : debug.logging = true"
+        - Exact match, case sensitive
+        - Values stored as strings ('true', 'false', not boolean)
         """
-        # Extract: Properties : key = value
         match = re.match(r'Properties\s*:\s*([^=]+?)\s*=\s*(.+)', condition, re.IGNORECASE)
         
         if not match:
@@ -259,83 +278,46 @@ class DatabaseService:
             return None
         
         key = match.group(1).strip()
-        value = match.group(2).strip()
+        value = match.group(2).strip().strip('"').strip("'")
         
-        # Remove quotes if present
-        value = value.strip('"').strip("'")
-        
-        # Store original string value
-        original_value = value
-        
-        # Convert string representations to actual types
-        converted_values = [original_value]  # Always include string version
-        
-        # Try boolean conversion
-        if value.lower() == 'true':
-            converted_values.append(True)
-        elif value.lower() == 'false':
-            converted_values.append(False)
-        
-        # Try numeric conversion
-        try:
-            if '.' in value:
-                converted_values.append(float(value))
-            else:
-                converted_values.append(int(value))
-        except ValueError:
-            pass
-        
-        logger.info(f"Properties search - Key: '{key}', Values to try: {converted_values}")
-        
-        # Build query that searches for any of the converted values
-        # This handles cases where the value might be stored as string, boolean, or number
+        # Build field path (after unwinding)
         field_path = f'Platform.Environment.Properties.{key}'
         
-        if len(converted_values) == 1:
-            query = {field_path: converted_values[0]}
-        else:
-            # Try all possible value types
-            query = {field_path: {'$in': converted_values}}
+        logger.info(f"Properties search: {field_path} = '{value}' (exact string match)")
         
-        logger.info(f"Properties query: {query}")
-        
-        return query
+        # Exact match as string (properties stored as strings)
+        return {field_path: value}
     
     def _parse_attribute_condition(self, condition: str) -> Optional[Dict]:
         """
-        Parse attribute condition: "Field = value"
+        Parse: "Field = value"
+        
+        After unwinding, fields are at:
+        - API Name: _id or "API Name"
+        - Platform: Platform.PlatformID
+        - Environment: Platform.Environment.environmentID
+        - Status: Platform.Environment.status
+        - Version: Platform.Environment.version
+        - UpdatedBy: Platform.Environment.updatedBy
         
         Rules:
-        - Exact match only (no partial text)
-        - Case sensitive
-        - Searches specific attribute
-        
-        Examples: 
-        - "Platform = IP4"
-        - "Environment = prd"
-        - "API Name = ivp-test-app"
+        - Exact match, case sensitive
         """
-        # Extract: Field = value
         parts = condition.split('=', 1)
         if len(parts) != 2:
             return None
         
         field = parts[0].strip()
-        value = parts[1].strip()
+        value = parts[1].strip().strip('"').strip("'")
         
-        # Remove quotes if present
-        value = value.strip('"').strip("'")
-        
-        logger.info(f"Attribute search - Field: '{field}', Value: '{value}' (exact, case sensitive)")
-        
-        # Map attribute names to MongoDB fields
+        # Map field names to MongoDB paths (after unwinding)
         field_mapping = {
             'API NAME': ['_id', 'API Name'],
             'PLATFORM': 'Platform.PlatformID',
             'ENVIRONMENT': 'Platform.Environment.environmentID',
             'STATUS': 'Platform.Environment.status',
-            'UPDATEDBY': 'Platform.Environment.updatedBy',
-            'VERSION': 'Platform.Environment.version'
+            'VERSION': 'Platform.Environment.version',
+            'UPDATEDBY': 'Platform.Environment.updatedBy'
         }
         
         field_upper = field.upper().replace(' ', '')
@@ -343,37 +325,51 @@ class DatabaseService:
         if field_upper in field_mapping:
             field_paths = field_mapping[field_upper]
             
-            # Make field_paths always a list
+            # Make it a list
             if isinstance(field_paths, str):
                 field_paths = [field_paths]
             
-            # Build exact match query
+            logger.info(f"Attribute search: {field} = '{value}' (exact match)")
+            
+            # Exact match
             if len(field_paths) == 1:
                 return {field_paths[0]: value}
             else:
-                # Multiple possible fields (e.g., _id or API Name)
+                # Multiple possible fields (e.g., _id or "API Name")
                 return {'$or': [{fp: value} for fp in field_paths]}
         
-        # Unknown field - return None
         logger.warning(f"Unknown attribute field: {field}")
         return None
     
-    def _parse_simple_text_condition(self, condition: str, regex: bool, case_sensitive: bool) -> Optional[Dict]:
+    def _parse_simple_text_condition(self, condition: str) -> Optional[Dict]:
         """
-        Parse simple text search: "searchterm"
+        Parse: "searchterm"
+        
+        After unwinding, searchable fields:
+        - _id
+        - API Name
+        - Platform.PlatformID
+        - Platform.Environment.environmentID
+        - Platform.Environment.status
+        - Platform.Environment.updatedBy
+        - Platform.Environment.version
         
         Rules:
-        - Partial match (contains)
-        - Case insensitive by default (unless case_sensitive checkbox is enabled)
-        - Searches ALL fields EXCEPT Properties
-        
-        Example: "blue" searches for "blue" in API Name, Platform, Environment, Status, etc.
+        - Word boundary matching (\bterm\b)
+        - Case insensitive
+        - Excludes Properties
+        - Treats - and _ as word boundaries
         """
         search_text = condition.strip()
         
-        logger.info(f"Simple text search: '{search_text}' (partial, case_sensitive={case_sensitive})")
+        # Word boundary regex pattern
+        # \b naturally treats - and _ as non-word chars (boundaries)
+        pattern = f'\\b{re.escape(search_text)}\\b'
         
-        # Fields to search (EXCLUDE Properties)
+        logger.info(f"Simple text search: '{search_text}' (word boundary, case insensitive)")
+        logger.info(f"Regex pattern: {pattern}")
+        
+        # Fields to search (after unwinding)
         search_fields = [
             '_id',
             'API Name',
@@ -384,188 +380,20 @@ class DatabaseService:
             'Platform.Environment.version'
         ]
         
-        if regex:
-            # Use as regex pattern
-            try:
-                flags = 0 if case_sensitive else re.IGNORECASE
-                pattern = re.compile(search_text, flags)
-                
-                return {
-                    '$or': [
-                        {field: {'$regex': pattern}} for field in search_fields
-                    ]
-                }
-            except re.error:
-                # Invalid regex, fall back to literal search
-                logger.warning(f"Invalid regex pattern: {search_text}")
-        
-        # Regular search - case insensitive contains
-        options = '' if case_sensitive else 'i'
-        
+        # Build $or with regex for each field
         return {
             '$or': [
-                {field: {'$regex': re.escape(search_text), '$options': options}}
+                {field: {'$regex': pattern, '$options': 'i'}}
                 for field in search_fields
             ]
         }
     
-    def _flatten_api_document(self, api: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """
-        Flatten API document with Platform array into table rows.
-        Each platform-environment combination becomes a row.
-        """
-        rows = []
-        
-        # _id is now the API name
-        api_name = api.get('_id', api.get('API Name', 'N/A'))
-        
-        # Also support legacy "API Name" field
-        if api_name == 'N/A' and 'API Name' in api:
-            api_name = api['API Name']
-        
-        # Check if Platform is an array (new structure)
-        if 'Platform' in api and isinstance(api['Platform'], list) and len(api['Platform']) > 0:
-            for platform in api['Platform']:
-                # Handle various field name formats for PlatformID
-                platform_id = (platform.get('PlatformID') or 
-                             platform.get('platformID') or 
-                             platform.get('platform_id') or 
-                             platform.get('platformId') or 'N/A')
-                
-                if 'Environment' in platform and isinstance(platform['Environment'], list) and len(platform['Environment']) > 0:
-                    for env in platform['Environment']:
-                        # Handle various field name formats
-                        environment_id = (env.get('environmentID') or 
-                                        env.get('environment_id') or 
-                                        env.get('environmentId') or 
-                                        env.get('environment') or 'N/A')
-                        
-                        # Extract version from environment level
-                        version = (env.get('version') or 
-                                  env.get('Version') or 
-                                  env.get('api_version') or 
-                                  env.get('apiVersion') or 
-                                  env.get('app_version') or 
-                                  env.get('appVersion') or 'N/A')
-                        
-                        # Try different field name formats for dates
-                        deployment_date = (env.get('deploymentDate') or 
-                                         env.get('deployment_date') or 
-                                         env.get('DeploymentDate') or 
-                                         env.get('created_at') or 
-                                         env.get('createdAt'))
-                        
-                        last_updated = (env.get('lastUpdated') or 
-                                      env.get('last_updated') or 
-                                      env.get('LastUpdated') or 
-                                      env.get('updated_at') or 
-                                      env.get('updatedAt'))
-                        
-                        updated_by = (env.get('updatedBy') or 
-                                    env.get('updated_by') or 
-                                    env.get('UpdatedBy') or 
-                                    env.get('modified_by') or 
-                                    env.get('modifiedBy') or 'N/A')
-                        
-                        status = (env.get('status') or 
-                                env.get('Status') or 
-                                env.get('state') or 
-                                env.get('State') or 'UNKNOWN')
-                        
-                        properties = (env.get('Properties') or 
-                                    env.get('properties') or 
-                                    env.get('props') or 
-                                    env.get('attributes') or {})
-                        
-                        row = {
-                            '_id': api_name,
-                            'API Name': api_name,
-                            'Version': version,
-                            'PlatformID': platform_id,
-                            'Environment': environment_id,
-                            'DeploymentDate': self._format_date(deployment_date),
-                            'LastUpdated': self._format_date(last_updated),
-                            'UpdatedBy': updated_by,
-                            'Status': status,
-                            'Properties': properties
-                        }
-                        rows.append(row)
-                else:
-                    # Platform without environments
-                    version = platform.get('version', platform.get('Version', 'N/A'))
-                    
-                    row = {
-                        '_id': api_name,
-                        'API Name': api_name,
-                        'Version': version,
-                        'PlatformID': platform_id,
-                        'Environment': 'N/A',
-                        'DeploymentDate': self._format_date(platform.get('deploymentDate')),
-                        'LastUpdated': self._format_date(platform.get('lastUpdated')),
-                        'UpdatedBy': platform.get('updatedBy', 'N/A'),
-                        'Status': platform.get('status', 'UNKNOWN'),
-                        'Properties': platform.get('Properties', {})
-                    }
-                    rows.append(row)
-        
-        # Handle old structure (Platform as string) - for backward compatibility
-        elif 'Platform' in api and isinstance(api['Platform'], str):
-            version = api.get('version', api.get('Version', 'N/A'))
-            
-            row = {
-                '_id': api_name,
-                'API Name': api_name,
-                'Version': version,
-                'PlatformID': api.get('Platform', 'N/A'),
-                'Environment': api.get('Environment', 'N/A'),
-                'DeploymentDate': self._format_date(api.get('DeploymentDate')),
-                'LastUpdated': self._format_date(api.get('LastUpdated')),
-                'UpdatedBy': api.get('UpdatedBy', 'N/A'),
-                'Status': api.get('Status', 'UNKNOWN'),
-                'Properties': api.get('Properties', {})
-            }
-            rows.append(row)
-        else:
-            # No platform data - return single row with available data
-            version = api.get('version', api.get('Version', 'N/A'))
-            
-            row = {
-                '_id': api_name,
-                'API Name': api_name,
-                'Version': version,
-                'PlatformID': api.get('platform', api.get('Platform', 'N/A')),
-                'Environment': api.get('environment', api.get('Environment', 'N/A')),
-                'DeploymentDate': self._format_date(api.get('deploymentDate', api.get('created_at'))),
-                'LastUpdated': self._format_date(api.get('lastUpdated', api.get('updated_at'))),
-                'UpdatedBy': api.get('updatedBy', api.get('updated_by', 'N/A')),
-                'Status': api.get('status', api.get('Status', 'UNKNOWN')),
-                'Properties': api.get('properties', api.get('Properties', {}))
-            }
-            rows.append(row)
-        
-        return rows
-    
     def _format_date(self, date_value):
-        """
-        Format date for display in local timezone (CET/CEST).
-        """
+        """Format date for display in local timezone (CET/CEST)."""
         if not date_value:
             return 'N/A'
         
         return format_datetime(date_value, include_timezone=True)
-    
-    def _convert_dates_to_strings(self, obj):
-        """
-        Recursively convert datetime objects to ISO format strings.
-        """
-        if isinstance(obj, dict):
-            return {k: self._convert_dates_to_strings(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
-            return [self._convert_dates_to_strings(item) for item in obj]
-        elif isinstance(obj, datetime):
-            return obj.isoformat() + 'Z'
-        else:
-            return obj
     
     def get_stats(self) -> Dict[str, Any]:
         """Get database statistics."""
@@ -574,19 +402,10 @@ class DatabaseService:
             
             # Get unique platforms
             pipeline = [
-                {'$project': {
-                    'platforms': {
-                        '$cond': {
-                            'if': {'$isArray': '$Platform'},
-                            'then': '$Platform.PlatformID',
-                            'else': ['$Platform']
-                        }
-                    }
-                }},
-                {'$unwind': '$platforms'},
+                {'$unwind': '$Platform'},
                 {'$group': {
                     '_id': None,
-                    'unique_platforms': {'$addToSet': '$platforms'}
+                    'unique_platforms': {'$addToSet': '$Platform.PlatformID'}
                 }}
             ]
             
@@ -595,28 +414,30 @@ class DatabaseService:
             
             # Get unique environments
             env_pipeline = [
-                {'$project': {
-                    'environments': {
-                        '$cond': {
-                            'if': {'$isArray': '$Platform'},
-                            'then': '$Platform.Environment.environmentID',
-                            'else': ['$Environment']
-                        }
-                    }
-                }},
-                {'$unwind': '$environments'},
-                {'$unwind': {'path': '$environments', 'preserveNullAndEmptyArrays': True}},
+                {'$unwind': '$Platform'},
+                {'$unwind': '$Platform.Environment'},
                 {'$group': {
                     '_id': None,
-                    'unique_environments': {'$addToSet': '$environments'}
+                    'unique_environments': {'$addToSet': '$Platform.Environment.environmentID'}
                 }}
             ]
             
             env_result = list(self.collection.aggregate(env_pipeline))
             environments = env_result[0]['unique_environments'] if env_result else []
             
+            # Count total deployments
+            deploy_pipeline = [
+                {'$unwind': '$Platform'},
+                {'$unwind': '$Platform.Environment'},
+                {'$count': 'total'}
+            ]
+            
+            deploy_result = list(self.collection.aggregate(deploy_pipeline))
+            total_deployments = deploy_result[0]['total'] if deploy_result else 0
+            
             return {
                 'total_apis': total_count,
+                'total_deployments': total_deployments,
                 'database': self.db_name,
                 'collection': self.collection_name,
                 'unique_platforms': len([p for p in platforms if p]),

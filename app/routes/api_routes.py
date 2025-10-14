@@ -9,33 +9,32 @@ bp = Blueprint('api', __name__, url_prefix='/api')
 @bp.route('/search', methods=['GET', 'POST'])
 def search():
     """
-    Search APIs endpoint.
-    Updated to handle Platform array structure.
+    Search APIs endpoint with row-level filtering.
+    Returns only matching deployment rows.
     """
     try:
         if request.method == 'POST':
             data = request.get_json()
             query = data.get('q', '')
             page = data.get('page', 1)
-            page_size = data.get('page_size', 10)
+            page_size = data.get('page_size', 100)
         else:
             query = request.args.get('q', '')
             page = int(request.args.get('page', 1))
-            page_size = int(request.args.get('page_size', 10))
+            page_size = int(request.args.get('page_size', 100))
         
         # Validate pagination
         if page < 1:
             return jsonify({'error': 'Page must be >= 1'}), 400
-        if page_size < 1 or page_size > 100:
-            return jsonify({'error': 'Page size must be between 1 and 100'}), 400
+        if page_size < 1 or page_size > 1000:
+            return jsonify({'error': 'Page size must be between 1 and 1000'}), 400
         
-        # Use the database service to search
-        # The search_apis method now returns flattened results
+        logger.info(f"Search request: query='{query}', page={page}, page_size={page_size}")
+        
+        # Search using database service (returns already flattened and filtered rows)
         all_results = current_app.db_service.search_apis(
             query=query,
-            regex=False,
-            case_sensitive=False,
-            limit=1000  # Get more results for pagination
+            limit=10000  # Get more results for pagination
         )
         
         # Calculate pagination
@@ -47,7 +46,9 @@ def search():
         paginated_results = all_results[start_idx:end_idx]
         
         # Calculate total pages
-        total_pages = (total_results + page_size - 1) // page_size
+        total_pages = (total_results + page_size - 1) // page_size if page_size > 0 else 1
+        
+        logger.info(f"Search complete: {total_results} total results, returning page {page}/{total_pages}")
         
         return jsonify({
             'status': 'success',
@@ -63,7 +64,7 @@ def search():
         })
         
     except Exception as e:
-        logger.error(f"Search error: {str(e)}")
+        logger.error(f"Search error: {str(e)}", exc_info=True)
         return jsonify({
             'status': 'error',
             'message': str(e)
@@ -75,51 +76,35 @@ def get_suggestions(field):
     try:
         prefix = request.args.get('prefix', '')
         
-        # Map field names to database fields (updated for Platform array)
-        field_mapping = {
-            'Platform': 'Platform.PlatformID',
-            'Environment': 'Platform.Environment.environmentID',
-            'Status': 'Platform.Environment.status',
-            'UpdatedBy': 'Platform.Environment.updatedBy',
-            'APIName': 'API Name'
-        }
-        
-        db_field = field_mapping.get(field, field)
-        
-        # Get distinct values from database
-        # Handle both old and new structure
-        if field in ['Platform', 'Environment', 'Status', 'UpdatedBy']:
-            # For nested fields, we need to use aggregation
-            pipeline = []
+        # Use aggregation to get distinct values after unwinding
+        if field in ['Platform', 'Environment', 'Status', 'UpdatedBy', 'Version']:
+            pipeline = [
+                {'$unwind': '$Platform'},
+                {'$unwind': '$Platform.Environment'}
+            ]
             
-            if field == 'Platform':
-                pipeline = [
-                    {'$unwind': {'path': '$Platform', 'preserveNullAndEmptyArrays': True}},
-                    {'$group': {'_id': '$Platform.PlatformID'}},
-                    {'$match': {'_id': {'$regex': f'^{prefix}', '$options': 'i'}}},
-                    {'$limit': 10}
-                ]
-            elif field in ['Environment', 'Status', 'UpdatedBy']:
-                nested_field = {
-                    'Environment': 'environmentID',
-                    'Status': 'status',
-                    'UpdatedBy': 'updatedBy'
-                }[field]
-                pipeline = [
-                    {'$unwind': {'path': '$Platform', 'preserveNullAndEmptyArrays': True}},
-                    {'$unwind': {'path': '$Platform.Environment', 'preserveNullAndEmptyArrays': True}},
-                    {'$group': {'_id': f'$Platform.Environment.{nested_field}'}},
-                    {'$match': {'_id': {'$regex': f'^{prefix}', '$options': 'i'}}},
-                    {'$limit': 10}
-                ]
+            field_mapping = {
+                'Platform': '$Platform.PlatformID',
+                'Environment': '$Platform.Environment.environmentID',
+                'Status': '$Platform.Environment.status',
+                'UpdatedBy': '$Platform.Environment.updatedBy',
+                'Version': '$Platform.Environment.version'
+            }
+            
+            field_path = field_mapping.get(field)
+            
+            pipeline.extend([
+                {'$group': {'_id': field_path}},
+                {'$match': {'_id': {'$regex': f'^{prefix}', '$options': 'i'}}},
+                {'$limit': 10},
+                {'$sort': {'_id': 1}}
+            ])
             
             results = list(current_app.db_service.collection.aggregate(pipeline))
             suggestions = [r['_id'] for r in results if r['_id']]
         else:
-            # For simple fields, use distinct
-            all_values = current_app.db_service.collection.distinct(db_field)
-            
-            # Filter by prefix
+            # For API Name
+            all_values = current_app.db_service.collection.distinct('_id')
             suggestions = [
                 v for v in all_values 
                 if v and str(v).lower().startswith(prefix.lower())
@@ -127,11 +112,11 @@ def get_suggestions(field):
         
         return jsonify({
             'status': 'success',
-            'data': suggestions
+            'data': sorted(suggestions)
         })
         
     except Exception as e:
-        logger.error(f"Suggestions error: {str(e)}")
+        logger.error(f"Suggestions error: {str(e)}", exc_info=True)
         return jsonify({
             'status': 'error',
             'message': str(e)
@@ -142,43 +127,6 @@ def get_stats():
     """Get database statistics."""
     try:
         stats = current_app.db_service.get_stats()
-        
-        # Count total deployments (platform-environment combinations)
-        pipeline = [
-            {'$project': {
-                'deployments': {
-                    '$cond': {
-                        'if': {'$isArray': '$Platform'},
-                        'then': {
-                            '$reduce': {
-                                'input': '$Platform',
-                                'initialValue': 0,
-                                'in': {
-                                    '$add': [
-                                        '$$value',
-                                        {'$cond': {
-                                            'if': {'$isArray': '$$this.Environment'},
-                                            'then': {'$size': '$$this.Environment'},
-                                            'else': 1
-                                        }}
-                                    ]
-                                }
-                            }
-                        },
-                        'else': 1
-                    }
-                }
-            }},
-            {'$group': {
-                '_id': None,
-                'total_deployments': {'$sum': '$deployments'}
-            }}
-        ]
-        
-        deployment_result = list(current_app.db_service.collection.aggregate(pipeline))
-        total_deployments = deployment_result[0]['total_deployments'] if deployment_result else 0
-        
-        stats['total_deployments'] = total_deployments
         
         return jsonify({
             'status': 'success',
@@ -194,20 +142,15 @@ def get_stats():
 
 @bp.route('/export', methods=['POST'])
 def export_data():
-    """
-    Export search results.
-    Updated to handle flattened Platform array data.
-    """
+    """Export search results."""
     try:
         data = request.get_json()
         query = data.get('query', '')
         format_type = data.get('format', 'json')
         
-        # Get search results (already flattened)
+        # Get search results
         results = current_app.db_service.search_apis(
             query=query,
-            regex=False,
-            case_sensitive=False,
             limit=10000
         )
         

@@ -1,9 +1,7 @@
-// Complete search.js file with Properties Modal and Version display
+// Complete search.js - Simplified without checkboxes
 let currentPage = 1;
 let currentPerPage = 100;
 let currentSearchQuery = '';
-let currentCaseSensitive = false;
-let currentRegexMode = false;
 let allResults = [];
 
 // Initialize on page load
@@ -36,22 +34,6 @@ function setupEventListeners() {
             currentSearchQuery = '';
             currentPage = 1;
             loadAPIs();
-        });
-    }
-    
-    // Regex mode checkbox
-    const regexMode = document.getElementById('regexMode');
-    if (regexMode) {
-        regexMode.addEventListener('change', function() {
-            currentRegexMode = this.checked;
-        });
-    }
-    
-    // Case sensitive checkbox
-    const caseSensitive = document.getElementById('caseSensitive');
-    if (caseSensitive) {
-        caseSensitive.addEventListener('change', function() {
-            currentCaseSensitive = this.checked;
         });
     }
     
@@ -174,12 +156,6 @@ async function loadAPIs() {
         
         console.log('Number of results:', allResults.length);
         
-        // Debug: Log first result to see structure
-        if (allResults.length > 0) {
-            console.log('First result structure:', allResults[0]);
-            console.log('First result Version field:', allResults[0].Version || allResults[0].version);
-        }
-        
         // Display results
         displayAPIs(allResults);
         updateResultsCount(allResults.length);
@@ -193,55 +169,6 @@ async function loadAPIs() {
         console.error('Error loading APIs:', error);
         displayError('Failed to load APIs: ' + error.message);
     }
-}
-
-function extractVersion(api) {
-    /**
-     * Extract version from API object.
-     * Version is at the environment level (sent from backend in flattened structure).
-     */
-    
-    // Check if version is directly in the API object (from flattened structure)
-    if (api.Version) {
-        console.log('Found version in API.Version:', api.Version);
-        return api.Version;
-    }
-    
-    if (api.version) {
-        console.log('Found version in API.version:', api.version);
-        return api.version;
-    }
-    
-    // Fallback: check properties object (for backward compatibility)
-    const properties = api.Properties || api.properties;
-    if (properties && typeof properties === 'object') {
-        console.log('Checking properties for version as fallback...');
-        
-        const versionFields = [
-            'version', 'Version', 'VERSION',
-            'app.version', 'api.version',
-            'apiVersion', 'appVersion',
-            'app_version', 'api_version'
-        ];
-        
-        for (const field of versionFields) {
-            if (properties[field]) {
-                console.log(`Found version in properties['${field}']:`, properties[field]);
-                return properties[field];
-            }
-        }
-        
-        // Look for any key containing 'version'
-        for (const [key, value] of Object.entries(properties)) {
-            if (key.toLowerCase().includes('version')) {
-                console.log(`Found version in key containing 'version' ('${key}'):`, value);
-                return value;
-            }
-        }
-    }
-    
-    console.log('No version found');
-    return 'N/A';
 }
 
 function displayAPIs(apis) {
@@ -260,7 +187,7 @@ function displayAPIs(apis) {
     }
     
     // Display each row
-    apis.forEach((api, index) => {
+    apis.forEach((api) => {
         const tr = document.createElement('tr');
         
         // Handle field names from backend
@@ -271,16 +198,10 @@ function displayAPIs(apis) {
         const lastUpdated = api.LastUpdated || api.lastUpdated || 'N/A';
         const updatedBy = api.UpdatedBy || api.updatedBy || 'N/A';
         const status = api.Status || api.status || 'UNKNOWN';
+        const version = api.Version || api.version || 'N/A';
         const properties = api.Properties || api.properties || {};
         
-        // Extract version - pass entire API object
-        const version = extractVersion(api);
-        
         const statusClass = getStatusClass(status);
-        
-        // Store properties in data attribute for the modal
-        tr.dataset.properties = JSON.stringify(properties);
-        tr.dataset.apiName = apiName;
         
         tr.innerHTML = `
             <td class="api-name">${escapeHtml(apiName)}</td>
@@ -311,32 +232,20 @@ function getStatusClass(status) {
         'RUNNING': 'status-running',
         'ACTIVE': 'status-active',
         'DEPLOYED': 'status-deployed',
-        'SUCCESSFUL': 'status-running',
-        'SUCCESS': 'status-running',
-        'HEALTHY': 'status-running',
-        'ONLINE': 'status-running',
+        'STARTED': 'status-running',
         
         // Red statuses
         'STOPPED': 'status-stopped',
         'FAILED': 'status-failed',
         'ERROR': 'status-error',
-        'FAILURE': 'status-failed',
-        'OFFLINE': 'status-stopped',
-        'TERMINATED': 'status-stopped',
-        'CRASHED': 'status-failed',
         
         // Yellow/Orange statuses
         'DEPLOYING': 'status-deploying',
         'PENDING': 'status-pending',
-        'STARTING': 'status-deploying',
-        'IN_PROGRESS': 'status-deploying',
-        'UPDATING': 'status-deploying',
         
         // Gray statuses
         'UNKNOWN': 'status-unknown',
-        'MAINTENANCE': 'status-maintenance',
-        'PAUSED': 'status-maintenance',
-        'SUSPENDED': 'status-maintenance'
+        'MAINTENANCE': 'status-maintenance'
     };
     
     return statusMap[normalizedStatus] || 'status-unknown';
@@ -347,44 +256,27 @@ function viewProperties(properties, apiName) {
     const modalBody = document.getElementById('modalBody');
     
     if (!modal || !modalBody) {
-        // Fallback to alert if modal doesn't exist
-        if (!properties || Object.keys(properties).length === 0) {
-            alert('No properties available');
-        } else {
-            let content = 'Properties:\n\n';
-            for (const [key, value] of Object.entries(properties)) {
-                content += `${key}: ${value}\n`;
-            }
-            alert(content);
-        }
+        alert('Modal not available');
         return;
     }
     
     // Store properties for copy function
     window.currentProperties = properties;
     
-    // Update modal header if needed
+    // Update modal header
     const modalHeader = modal.querySelector('.modal-header h2');
     if (modalHeader && apiName) {
         modalHeader.textContent = `Properties - ${apiName}`;
     }
     
-    // Build properties HTML with better formatting
+    // Build properties HTML
     if (!properties || Object.keys(properties).length === 0) {
         modalBody.innerHTML = '<div class="no-properties">No properties available</div>';
     } else {
         let propertiesHtml = '<div class="properties-container">';
         
-        // Sort properties alphabetically by key, with version first if it exists
-        const sortedKeys = Object.keys(properties).sort((a, b) => {
-            // Put version fields at the top
-            const aIsVersion = a.toLowerCase().includes('version');
-            const bIsVersion = b.toLowerCase().includes('version');
-            
-            if (aIsVersion && !bIsVersion) return -1;
-            if (!aIsVersion && bIsVersion) return 1;
-            return a.localeCompare(b);
-        });
+        // Sort properties alphabetically
+        const sortedKeys = Object.keys(properties).sort();
         
         for (const key of sortedKeys) {
             const value = properties[key];
@@ -392,28 +284,18 @@ function viewProperties(properties, apiName) {
             let displayValue = String(value);
             
             // Special handling for different value types
-            if (value === true || value === 'true') {
+            if (value === 'true') {
                 valueClass += ' property-value-boolean-true';
-                displayValue = 'true';
-            } else if (value === false || value === 'false') {
+            } else if (value === 'false') {
                 valueClass += ' property-value-boolean-false';
-                displayValue = 'false';
-            } else if (typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://'))) {
-                // URLs - make them clickable
-                displayValue = value;
-                valueClass += ' property-value-url';
             }
-            
-            // Highlight version fields
-            const isVersionField = key.toLowerCase().includes('version');
-            const keyClass = isVersionField ? 'property-key property-key-version' : 'property-key';
             
             // Format the key for better display
             const formattedKey = key.replace(/\./g, '.<wbr>').replace(/_/g, '_<wbr>');
             
             propertiesHtml += `
-                <div class="property-item${isVersionField ? ' property-item-version' : ''}">
-                    <div class="${keyClass}">${formattedKey}:</div>
+                <div class="property-item">
+                    <div class="property-key">${formattedKey}:</div>
                     <div class="${valueClass}">${escapeHtml(displayValue)}</div>
                 </div>
             `;
@@ -440,7 +322,6 @@ function copyProperties() {
     
     // Copy to clipboard
     navigator.clipboard.writeText(text).then(function() {
-        // Show success message
         const copyBtn = document.querySelector('.btn-copy');
         const originalText = copyBtn.textContent;
         copyBtn.textContent = 'Copied!';
