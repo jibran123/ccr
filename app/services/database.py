@@ -66,7 +66,7 @@ class DatabaseService:
         Search Types:
         1. Simple text: "blue" - Word boundary, case insensitive, excludes Properties
         2. Attribute: "Platform = IP4" - Exact match, case sensitive
-        3. Properties: "Properties : key = value" - Exact match, case sensitive
+        3. Properties: "Properties : key = value" - Exact match, case sensitive, handles dots in keys
         4. Combined: "blue AND Platform = IP4" - Row-level filtering
         
         Args:
@@ -171,14 +171,26 @@ class DatabaseService:
                 'API Name': {
                     '$ifNull': ['$API Name', '$_id']
                 },
-                'Version': '$Platform.Environment.version',
+                'Version': {
+                    '$ifNull': ['$Platform.Environment.version', 'N/A']
+                },
                 'PlatformID': '$Platform.PlatformID',
                 'Environment': '$Platform.Environment.environmentID',
-                'DeploymentDate': '$Platform.Environment.deploymentDate',
-                'LastUpdated': '$Platform.Environment.lastUpdated',
-                'UpdatedBy': '$Platform.Environment.updatedBy',
-                'Status': '$Platform.Environment.status',
-                'Properties': '$Platform.Environment.Properties'
+                'DeploymentDate': {
+                    '$ifNull': ['$Platform.Environment.deploymentDate', None]
+                },
+                'LastUpdated': {
+                    '$ifNull': ['$Platform.Environment.lastUpdated', None]
+                },
+                'UpdatedBy': {
+                    '$ifNull': ['$Platform.Environment.updatedBy', 'N/A']
+                },
+                'Status': {
+                    '$ifNull': ['$Platform.Environment.status', 'UNKNOWN']
+                },
+                'Properties': {
+                    '$ifNull': ['$Platform.Environment.Properties', {}]
+                }
             }
         })
         
@@ -270,6 +282,9 @@ class DatabaseService:
         Rules:
         - Exact match, case sensitive
         - Values stored as strings ('true', 'false', not boolean)
+        - Handles property keys with DOTS (e.g., 'debug.logging', 'api.id')
+        
+        CRITICAL FIX: Uses $getField to properly handle keys with dots
         """
         match = re.match(r'Properties\s*:\s*([^=]+?)\s*=\s*(.+)', condition, re.IGNORECASE)
         
@@ -280,13 +295,23 @@ class DatabaseService:
         key = match.group(1).strip()
         value = match.group(2).strip().strip('"').strip("'")
         
-        # Build field path (after unwinding)
-        field_path = f'Platform.Environment.Properties.{key}'
+        logger.info(f"Properties search: key='{key}', value='{value}' (exact string match)")
         
-        logger.info(f"Properties search: {field_path} = '{value}' (exact string match)")
-        
-        # Exact match as string (properties stored as strings)
-        return {field_path: value}
+        # CRITICAL FIX: Use $expr with $getField to handle dots in property keys
+        # This treats 'debug.logging' as a SINGLE key, not nested fields
+        return {
+            '$expr': {
+                '$eq': [
+                    {
+                        '$getField': {
+                            'field': key,
+                            'input': '$Platform.Environment.Properties'
+                        }
+                    },
+                    value
+                ]
+            }
+        }
     
     def _parse_attribute_condition(self, condition: str) -> Optional[Dict]:
         """
