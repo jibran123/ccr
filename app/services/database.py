@@ -245,7 +245,8 @@ class DatabaseService:
         
         Rules:
         - Exact match only (no partial text)
-        - Case sensitive
+        - Case sensitive for keys
+        - Handles type conversion for values (boolean, numbers)
         - Searches within Properties object only
         
         Example: "Properties : debug.logging = true"
@@ -263,12 +264,42 @@ class DatabaseService:
         # Remove quotes if present
         value = value.strip('"').strip("'")
         
-        logger.info(f"Properties search - Key: '{key}', Value: '{value}' (exact, case sensitive)")
+        # Store original string value
+        original_value = value
         
-        # Search in nested Properties within Platform array
-        return {
-            'Platform.Environment.Properties.' + key: value
-        }
+        # Convert string representations to actual types
+        converted_values = [original_value]  # Always include string version
+        
+        # Try boolean conversion
+        if value.lower() == 'true':
+            converted_values.append(True)
+        elif value.lower() == 'false':
+            converted_values.append(False)
+        
+        # Try numeric conversion
+        try:
+            if '.' in value:
+                converted_values.append(float(value))
+            else:
+                converted_values.append(int(value))
+        except ValueError:
+            pass
+        
+        logger.info(f"Properties search - Key: '{key}', Values to try: {converted_values}")
+        
+        # Build query that searches for any of the converted values
+        # This handles cases where the value might be stored as string, boolean, or number
+        field_path = f'Platform.Environment.Properties.{key}'
+        
+        if len(converted_values) == 1:
+            query = {field_path: converted_values[0]}
+        else:
+            # Try all possible value types
+            query = {field_path: {'$in': converted_values}}
+        
+        logger.info(f"Properties query: {query}")
+        
+        return query
     
     def _parse_attribute_condition(self, condition: str) -> Optional[Dict]:
         """
