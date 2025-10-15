@@ -76,9 +76,20 @@ class Config:
         Returns:
             True if endpoint is public, False if authentication required
         """
+        # Special case: exact match for root path
+        if path == '/' or path == '/search':
+            return True
+        
+        # Check other public endpoints (skip root to avoid matching everything)
         for public_path in Config.PUBLIC_ENDPOINTS:
+            # Skip root path (already handled above)
+            if public_path in ['/', '/search']:
+                continue
+            
+            # Check if path starts with this public endpoint
             if path.startswith(public_path):
                 return True
+        
         return False
     
     # ==================== DEPLOYMENT CONFIGURATION ====================

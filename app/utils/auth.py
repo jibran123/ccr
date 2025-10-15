@@ -43,12 +43,6 @@ def generate_token(username: str, role: str = 'user',
         - expires_at: Expiration timestamp (ISO format)
         - username: Username
         - role: User role
-        
-    Example:
-        >>> with app.app_context():
-        ...     token_data = generate_token('john.doe', 'admin', 48)
-        ...     print(token_data['token'][:50])
-        eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
     """
     try:
         # Get configuration from Flask app
@@ -102,12 +96,6 @@ def validate_token(token: str) -> Dict[str, Any]:
         
     Raises:
         AuthError: If token is invalid, expired, or malformed
-        
-    Example:
-        >>> with app.app_context():
-        ...     payload = validate_token(token_string)
-        ...     print(payload['username'], payload['role'])
-        john.doe admin
     """
     try:
         secret_key = current_app.config.get('JWT_SECRET_KEY')
@@ -151,12 +139,6 @@ def get_token_from_request() -> Optional[str]:
     
     Returns:
         Token string or None if not found
-        
-    Example:
-        >>> # With header: Authorization: Bearer eyJ0eXAi...
-        >>> token = get_token_from_request()
-        >>> print(token[:20])
-        eyJ0eXAiOiJKV1QiLCJh...
     """
     auth_header = request.headers.get('Authorization', '')
     
@@ -208,23 +190,9 @@ def require_auth(roles: Optional[list] = None):
         @bp.route('/api/deploy', methods=['POST'])
         @require_auth()  # Any authenticated user
         def deploy_api():
-            # Access user info via request.user
             username = request.user['username']
             role = request.user['role']
             ...
-        
-        @bp.route('/api/admin/users', methods=['GET'])
-        @require_auth(roles=['admin'])  # Only admin role
-        def list_users():
-            ...
-    
-    The decorator:
-    1. Checks if authentication is enabled (AUTH_ENABLED)
-    2. Checks if endpoint is public (PUBLIC_ENDPOINTS)
-    3. Extracts token from Authorization header
-    4. Validates token
-    5. Checks user role (if roles specified)
-    6. Injects user info into request context (request.user)
     
     Returns:
         - 401 Unauthorized: No token or invalid token
@@ -234,38 +202,45 @@ def require_auth(roles: Optional[list] = None):
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
+            # ==================== ENHANCED DEBUG LOGGING ====================
+            logger.warning("=" * 70)
+            logger.warning(f"🔍 DECORATOR CALLED for {request.method} {request.path}")
+            
             # Check if auth is enabled
             auth_enabled = current_app.config.get('AUTH_ENABLED', False)
-    
-            logger.info(f"🔍 Request to {request.path} - AUTH_ENABLED={auth_enabled}")
-    
+            logger.warning(f"🔍 AUTH_ENABLED from current_app.config: {auth_enabled} (type: {type(auth_enabled)})")
+            
             if not auth_enabled:
                 # Auth disabled - allow request
-                logger.info(f"🔓 Auth disabled - allowing request to {request.path}")
+                logger.warning(f"🔓 Auth DISABLED - ALLOWING request to {request.path}")
+                logger.warning("=" * 70)
                 return f(*args, **kwargs)
-    
+            
             # Check if endpoint is public
             from app.config import is_public_endpoint
             is_public = is_public_endpoint(request.path)
-    
-            logger.info(f"🔍 Endpoint {request.path} public check: {is_public}")
-    
+            logger.warning(f"🔍 is_public_endpoint('{request.path}'): {is_public}")
+            
             if is_public:
-                logger.info(f"🔓 Public endpoint - allowing request to {request.path}")
+                logger.warning(f"🔓 Public endpoint - ALLOWING request to {request.path}")
+                logger.warning("=" * 70)
                 return f(*args, **kwargs)
-    
-            logger.info(f"🔒 Protected endpoint {request.path} - checking for token...")
-    
+            
+            logger.warning(f"🔒 Protected endpoint - REQUIRING TOKEN for {request.path}")
+            
             # Auth required - extract token
             token = get_token_from_request()
             
             if not token:
-                logger.warning(f"❌ No token provided for protected endpoint: {request.path}")
+                logger.warning(f"❌ NO TOKEN provided for protected endpoint: {request.path}")
+                logger.warning("=" * 70)
                 return jsonify({
                     'status': 'error',
                     'message': 'Authentication required. Please provide a valid token in the Authorization header.',
                     'error_code': 'AUTH_REQUIRED'
                 }), 401
+            
+            logger.warning(f"✅ Token found: {token[:20]}...")
             
             # Validate token
             try:
@@ -279,6 +254,7 @@ def require_auth(roles: Optional[list] = None):
                             f"User '{payload.get('username')}' with role '{user_role}' "
                             f"attempted to access endpoint requiring roles: {roles}"
                         )
+                        logger.warning("=" * 70)
                         return jsonify({
                             'status': 'error',
                             'message': f'Insufficient permissions. Required roles: {", ".join(roles)}',
@@ -291,15 +267,18 @@ def require_auth(roles: Optional[list] = None):
                     'role': payload.get('role')
                 }
                 
-                logger.info(
-                    f"Authenticated request to {request.path} by user '{payload.get('username')}' "
+                logger.warning(
+                    f"✅ Authenticated request to {request.path} by user '{payload.get('username')}' "
                     f"with role '{payload.get('role')}'"
                 )
+                logger.warning("=" * 70)
                 
                 # Call the protected function
                 return f(*args, **kwargs)
                 
             except AuthError as e:
+                logger.warning(f"❌ Auth error: {e.message}")
+                logger.warning("=" * 70)
                 return jsonify({
                     'status': 'error',
                     'message': e.message,
@@ -307,6 +286,7 @@ def require_auth(roles: Optional[list] = None):
                 }), e.status_code
             except Exception as e:
                 logger.error(f"Unexpected error in auth decorator: {str(e)}", exc_info=True)
+                logger.warning("=" * 70)
                 return jsonify({
                     'status': 'error',
                     'message': 'Authentication failed',
@@ -323,16 +303,5 @@ def get_current_user() -> Optional[Dict[str, Any]]:
     
     Returns:
         Dictionary with user info or None if not authenticated
-        
-    Usage:
-        @bp.route('/api/myinfo')
-        @require_auth()
-        def my_info():
-            user = get_current_user()
-            if user:
-                return jsonify({
-                    'username': user['username'],
-                    'role': user['role']
-                })
     """
     return getattr(request, 'user', None)
