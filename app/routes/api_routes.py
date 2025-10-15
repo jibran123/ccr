@@ -1,6 +1,7 @@
 """API routes for the application."""
 from flask import Blueprint, request, jsonify, current_app
 import logging
+from app.utils.auth import require_auth
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +142,7 @@ def get_stats():
         }), 500
 
 @bp.route('/export', methods=['POST'])
+@require_auth()
 def export_data():
     """Export search results."""
     try:

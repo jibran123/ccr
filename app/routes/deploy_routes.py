@@ -2,6 +2,7 @@
 from flask import Blueprint, request, jsonify, current_app
 from datetime import datetime
 import logging
+from app.utils.auth import require_auth
 
 # Import configuration
 from app.config import (
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 bp = Blueprint('deploy', __name__, url_prefix='/api')
 
 @bp.route('/deploy', methods=['POST'])
+@require_auth()
 def deploy_api():
     """
     Deploy or update an API deployment.

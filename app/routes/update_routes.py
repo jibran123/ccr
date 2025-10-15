@@ -1,6 +1,7 @@
 """Update routes for API management."""
 from flask import Blueprint, request, jsonify, current_app
 import logging
+from app.utils.auth import require_auth
 
 # Import configuration
 from app.config import (
@@ -17,6 +18,7 @@ logger = logging.getLogger(__name__)
 bp = Blueprint('update', __name__, url_prefix='/api/apis')
 
 @bp.route('/<api_name>/platforms/<platform_id>/environments/<env_id>', methods=['PUT'])
+@require_auth()
 def update_deployment_full(api_name, platform_id, env_id):
     """
     Full update (PUT) - Replace entire deployment.
@@ -117,6 +119,7 @@ def update_deployment_full(api_name, platform_id, env_id):
 
 
 @bp.route('/<api_name>/platforms/<platform_id>/environments/<env_id>', methods=['PATCH'])
+@require_auth()
 def update_deployment_partial(api_name, platform_id, env_id):
     """
     Partial update (PATCH) - Update only specified fields.
@@ -193,6 +196,7 @@ def update_deployment_partial(api_name, platform_id, env_id):
 
 
 @bp.route('/<api_name>/platforms/<platform_id>/environments/<env_id>/status', methods=['PATCH'])
+@require_auth()
 def update_status(api_name, platform_id, env_id):
     """
     Update only the status.
@@ -265,6 +269,7 @@ def update_status(api_name, platform_id, env_id):
 
 
 @bp.route('/<api_name>/platforms/<platform_id>/environments/<env_id>/properties', methods=['PATCH'])
+@require_auth()
 def update_properties(api_name, platform_id, env_id):
     """
     Update only properties.
@@ -340,6 +345,7 @@ def update_properties(api_name, platform_id, env_id):
 
 
 @bp.route('/<api_name>/platforms/<platform_id>/environments/<env_id>', methods=['DELETE'])
+@require_auth()
 def delete_deployment(api_name, platform_id, env_id):
     """
     Delete a specific deployment.
