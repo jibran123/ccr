@@ -30,22 +30,18 @@ class Config:
     # JWT Authentication Settings
     
     # Feature flag - Enable/disable authentication
-    # Set to 'true' in production after testing
     AUTH_ENABLED = os.getenv('AUTH_ENABLED', 'false').lower() == 'true'
     
     # JWT Secret Key - Used to sign tokens
-    # CRITICAL: Generate a strong random key for production!
-    # Example: python -c "import secrets; print(secrets.token_urlsafe(32))"
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'dev-jwt-secret-CHANGE-IN-PRODUCTION')
     
     # JWT Token expiration (in hours)
-    JWT_EXPIRATION_HOURS = int(os.getenv('JWT_EXPIRATION_HOURS', 24))
+    JWT_EXPIRATION_HOURS = int(os.getenv('JWT_EXPIRATION_HOURS') or 24)
     
-    # JWT Algorithm (don't change unless you know what you're doing)
+    # JWT Algorithm
     JWT_ALGORITHM = 'HS256'
     
     # Admin key for initial token generation
-    # CRITICAL: Change this to a strong password/key in production!
     JWT_ADMIN_KEY = os.getenv('JWT_ADMIN_KEY', 'dev-admin-key-CHANGE-IN-PRODUCTION')
     
     # Token prefix for Authorization header
@@ -53,16 +49,16 @@ class Config:
     
     # Endpoints that are always public (no authentication required)
     PUBLIC_ENDPOINTS = [
-        '/health',           # Health check
-        '/health/ready',     # Readiness probe
-        '/health/live',      # Liveness probe
-        '/health/metrics',   # Prometheus metrics
-        '/',                 # Main page
-        '/search',           # Web interface
-        '/static/',          # Static files (CSS, JS, images)
-        '/api/auth/token',   # Token generation endpoint
-        '/api/auth/verify',  # Token verification endpoint
-        '/api/auth/status',  # Authentication status
+        '/health',
+        '/health/ready',
+        '/health/live',
+        '/health/metrics',
+        '/',
+        '/search',
+        '/static/',
+        '/api/auth/token',
+        '/api/auth/verify',
+        '/api/auth/status',
     ]
     
     @staticmethod
@@ -80,20 +76,29 @@ class Config:
         if path == '/' or path == '/search':
             return True
         
-        # Check other public endpoints (skip root to avoid matching everything)
+        # Check other public endpoints
         for public_path in Config.PUBLIC_ENDPOINTS:
-            # Skip root path (already handled above)
             if public_path in ['/', '/search']:
                 continue
             
-            # Check if path starts with this public endpoint
             if path.startswith(public_path):
                 return True
         
         return False
     
+    # ==================== BACKUP CONFIGURATION ====================
+    # Backup settings
+    BACKUP_ENABLED = os.getenv('BACKUP_ENABLED', 'true').lower() == 'true'
+    BACKUP_DIR = os.getenv('BACKUP_DIR') or '/app/backups'
+    BACKUP_RETENTION_DAYS = int(os.getenv('BACKUP_RETENTION_DAYS') or 14)
+    BACKUP_COMPRESSION = os.getenv('BACKUP_COMPRESSION', 'true').lower() == 'true'
+    
+    # Backup schedule
+    BACKUP_SCHEDULE_HOUR = int(os.getenv('BACKUP_SCHEDULE_HOUR') or 2)
+    BACKUP_SCHEDULE_MINUTE = int(os.getenv('BACKUP_SCHEDULE_MINUTE') or 0)
+    
     # ==================== DEPLOYMENT CONFIGURATION ====================
-    # Platform Mapping - Add/remove platforms here
+    # Platform Mapping
     PLATFORM_MAPPING = {
         'IP2': 'IP2 Platform',
         'IP3': 'IP3 Platform',
@@ -110,7 +115,7 @@ class Config:
         'Alibaba': 'Alibaba Cloud'
     }
     
-    # Environment Mapping - Add/remove environments here
+    # Environment Mapping
     ENVIRONMENT_MAPPING = {
         'dev': 'Development',
         'tst': 'Test',
@@ -124,7 +129,7 @@ class Config:
         'sandbox': 'Sandbox'
     }
     
-    # Status Options - Add/remove statuses here
+    # Status Options
     STATUS_OPTIONS = [
         'RUNNING',
         'STARTED',
@@ -146,16 +151,12 @@ class Config:
 
 
 # ==================== MODULE-LEVEL EXPORTS ====================
-# Export variables for backward compatibility with existing code
-
-# MongoDB Configuration
 MONGO_HOST = Config.MONGO_HOST
 MONGO_PORT = Config.MONGO_PORT
 MONGO_DB = Config.MONGO_DB
 MONGO_COLLECTION = Config.MONGO_COLLECTION
 MONGO_URI = Config.MONGO_URI
 
-# Authentication Configuration
 AUTH_ENABLED = Config.AUTH_ENABLED
 JWT_SECRET_KEY = Config.JWT_SECRET_KEY
 JWT_EXPIRATION_HOURS = Config.JWT_EXPIRATION_HOURS
@@ -163,58 +164,35 @@ JWT_ALGORITHM = Config.JWT_ALGORITHM
 JWT_ADMIN_KEY = Config.JWT_ADMIN_KEY
 PUBLIC_ENDPOINTS = Config.PUBLIC_ENDPOINTS
 
-# Deployment Configuration
 PLATFORM_MAPPING = Config.PLATFORM_MAPPING
 ENVIRONMENT_MAPPING = Config.ENVIRONMENT_MAPPING
 STATUS_OPTIONS = Config.STATUS_OPTIONS
 
 
-# ==================== BACKUP CONFIGURATION ====================
-
-# Backup settings
-BACKUP_ENABLED = os.getenv('BACKUP_ENABLED', 'true').lower() == 'true'
-BACKUP_DIR = os.getenv('BACKUP_DIR', '/app/backups')
-BACKUP_RETENTION_DAYS = int(os.getenv('BACKUP_RETENTION_DAYS', 14))
-BACKUP_COMPRESSION = os.getenv('BACKUP_COMPRESSION', 'true').lower() == 'true'
-
-# Backup schedule (cron format: minute hour day month weekday)
-# Default: Daily at 2:00 AM
-BACKUP_SCHEDULE_HOUR = int(os.getenv('BACKUP_SCHEDULE_HOUR', 2))
-BACKUP_SCHEDULE_MINUTE = int(os.getenv('BACKUP_SCHEDULE_MINUTE', 0))
-
-
+# ==================== HELPER FUNCTIONS ====================
 def get_valid_platforms():
-    """Get list of valid platform IDs."""
     return list(Config.PLATFORM_MAPPING.keys())
 
 def get_valid_environments():
-    """Get list of valid environment IDs."""
     return list(Config.ENVIRONMENT_MAPPING.keys())
 
 def get_valid_statuses():
-    """Get list of valid status values."""
     return Config.STATUS_OPTIONS
 
 def is_valid_platform(platform_id: str) -> bool:
-    """Check if platform ID is valid."""
     return platform_id in Config.PLATFORM_MAPPING
 
 def is_valid_environment(environment_id: str) -> bool:
-    """Check if environment ID is valid."""
     return environment_id in Config.ENVIRONMENT_MAPPING
 
 def is_valid_status(status: str) -> bool:
-    """Check if status is valid."""
     return status in Config.STATUS_OPTIONS
 
 def get_platform_display_name(platform_id: str) -> str:
-    """Get display name for platform."""
     return Config.PLATFORM_MAPPING.get(platform_id, platform_id)
 
 def get_environment_display_name(environment_id: str) -> str:
-    """Get display name for environment."""
     return Config.ENVIRONMENT_MAPPING.get(environment_id, environment_id)
 
 def is_public_endpoint(path: str) -> bool:
-    """Check if endpoint is public (no authentication required)."""
     return Config.is_public_endpoint(path)
