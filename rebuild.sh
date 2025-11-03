@@ -4,8 +4,6 @@ echo "================================"
 echo "CCR API Manager - Rebuild Script"
 echo "================================"
 
-# Change to project directory
-cd ~/rws/ccr/ccr
 
 # Stop existing containers
 echo "Stopping existing containers..."

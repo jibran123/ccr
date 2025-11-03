@@ -52,9 +52,11 @@ services:
       MONGO_PORT: 27017
       MONGO_DB: ccr
       MONGO_COLLECTION: apis
+      BACKUP_ENABLED: "true"
+      BACKUP_RETENTION_DAYS: 14
     volumes:
-      #- ./:/app:ro:Z
       - ./logs:/app/logs:Z
+      - ./backups:/app/backups:Z  # ← NEW: Backup storage on host
     depends_on:
       mongo:
         condition: service_healthy

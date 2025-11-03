@@ -169,7 +169,19 @@ ENVIRONMENT_MAPPING = Config.ENVIRONMENT_MAPPING
 STATUS_OPTIONS = Config.STATUS_OPTIONS
 
 
-# ==================== HELPER FUNCTIONS ====================
+# ==================== BACKUP CONFIGURATION ====================
+
+# Backup settings
+BACKUP_ENABLED = os.getenv('BACKUP_ENABLED', 'true').lower() == 'true'
+BACKUP_DIR = os.getenv('BACKUP_DIR', '/app/backups')
+BACKUP_RETENTION_DAYS = int(os.getenv('BACKUP_RETENTION_DAYS', 14))
+BACKUP_COMPRESSION = os.getenv('BACKUP_COMPRESSION', 'true').lower() == 'true'
+
+# Backup schedule (cron format: minute hour day month weekday)
+# Default: Daily at 2:00 AM
+BACKUP_SCHEDULE_HOUR = int(os.getenv('BACKUP_SCHEDULE_HOUR', 2))
+BACKUP_SCHEDULE_MINUTE = int(os.getenv('BACKUP_SCHEDULE_MINUTE', 0))
+
 
 def get_valid_platforms():
     """Get list of valid platform IDs."""
