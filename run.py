@@ -1,21 +1,25 @@
-#!/usr/bin/env python3
-"""Application entry point."""
+#!/usr/bin/env python
+"""
+Application entry point.
+Starts the Flask application.
+"""
 
-import os
-import sys
-from dotenv import load_dotenv
+from app import create_app, scheduler
+import logging
 
-# Load environment variables from .env file FIRST
-load_dotenv()
-
-# Add project directory to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from app import create_app
+logger = logging.getLogger(__name__)
 
 app = create_app()
 
-if __name__ == "__main__":
-    port = int(os.environ.get("FLASK_PORT", 5000))
-    debug = os.environ.get("FLASK_ENV", "production") == "development"
-    app.run(host="0.0.0.0", port=port, debug=debug)
+if __name__ == '__main__':
+    # Start scheduler after app is created
+    if hasattr(scheduler, 'scheduler') and scheduler.scheduler:
+        scheduler.start()
+        logger.info("✅ Scheduler started")
+    
+    # Run Flask app
+    app.run(
+        host='0.0.0.0',
+        port=5000,
+        debug=False
+    )

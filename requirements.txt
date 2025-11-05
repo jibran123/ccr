@@ -6,3 +6,4 @@ python-dotenv==1.0.0
 gunicorn==21.2.0
 pytz==2024.1
 PyJWT==2.8.0
+APScheduler==3.10.4

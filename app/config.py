@@ -54,6 +54,7 @@ class Config:
         '/health/live',
         '/health/metrics',
         '/',
+        '/api/admin/scheduler/jobs'
         '/search',
         '/static/',
         '/api/auth/token',

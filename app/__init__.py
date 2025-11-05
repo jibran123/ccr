@@ -6,11 +6,16 @@ Creates and configures the Flask application with all routes and services.
 from flask import Flask
 from flask_cors import CORS
 import logging
+import atexit
 
 from app.config import Config
 from app.services.database import DatabaseService
+from app.utils.scheduler import AppScheduler
 
 logger = logging.getLogger(__name__)
+
+# Global scheduler instance
+scheduler = AppScheduler()
 
 
 def create_app(config_class=Config):
@@ -27,7 +32,7 @@ def create_app(config_class=Config):
     # Create Flask app
     app = Flask(__name__)
     
-    # ⚠️ CRITICAL: Load configuration from Config class into Flask app.config
+    # Load configuration from Config class into Flask app.config
     app.config.from_object(config_class)
     
     logger.info(f"Starting {app.config.get('APP_NAME')} v{app.config.get('APP_VERSION')}")
@@ -70,7 +75,7 @@ def create_app(config_class=Config):
         deploy_routes,
         update_routes,
         auth_routes,
-        admin_routes  # ← NEW
+        admin_routes
     )
     
     app.register_blueprint(main_routes.bp)
@@ -79,17 +84,27 @@ def create_app(config_class=Config):
     app.register_blueprint(deploy_routes.bp)
     app.register_blueprint(update_routes.bp)
     app.register_blueprint(auth_routes.bp)
-    app.register_blueprint(admin_routes.bp)  # ← NEW
+    app.register_blueprint(admin_routes.bp)
     
     logger.info("Deploy API endpoint available at: POST /api/deploy")
     logger.info("Update API endpoints available at: PUT/PATCH/DELETE /api/apis/...")
     logger.info("Auth API endpoints available at: POST /api/auth/token, /api/auth/verify")
-    logger.info("Admin API endpoints available at: /api/admin/*")  # ← NEW
+    logger.info("Admin API endpoints available at: /api/admin/*")
     
     # Log authentication status
     if app.config.get('AUTH_ENABLED'):
         logger.warning("🔒 Authentication is ENABLED - API endpoints require valid JWT tokens")
     else:
         logger.warning("⚠️  Authentication is DISABLED - API endpoints are publicly accessible")
+    
+    # Initialize and start scheduler
+    if app.config.get('BACKUP_ENABLED', True):
+        scheduler.init_app(app)
+        logger.info("✅ Scheduler initialized - will start after app context")
+    else:
+        logger.info("⚠️  Scheduler disabled - automated backups will not run")
+    
+    # Register cleanup on shutdown
+    atexit.register(lambda: scheduler.shutdown(wait=False))
     
     return app

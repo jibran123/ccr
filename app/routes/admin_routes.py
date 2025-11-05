@@ -515,3 +515,47 @@ def backup_status():
             'status': 'error',
             'message': f'Failed to get backup status: {str(e)}'
         }), 500
+
+@bp.route('/scheduler/jobs', methods=['GET'])
+def get_scheduled_jobs():
+    """
+    Get list of scheduled jobs.
+    
+    Returns information about scheduled background jobs (like automated backups).
+    This endpoint is public and does not require authentication.
+    
+    **Response (200):**
+```json
+    {
+        "status": "success",
+        "scheduler_running": true,
+        "data": [
+            {
+                "id": "automated_backup",
+                "name": "Automated Database Backup",
+                "next_run": "2025-11-05T02:00:00+00:00",
+                "trigger": "cron[hour='2', minute='0']"
+            }
+        ],
+        "count": 1
+    }
+```
+    """
+    try:
+        from app import scheduler
+        
+        jobs = scheduler.get_jobs()
+        
+        return jsonify({
+            'status': 'success',
+            'scheduler_running': scheduler.scheduler.running if scheduler.scheduler else False,
+            'data': jobs,
+            'count': len(jobs)
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Failed to get scheduled jobs: {str(e)}", exc_info=True)
+        return jsonify({
+            'status': 'error',
+            'message': f'Failed to get scheduled jobs: {str(e)}'
+        }), 500
