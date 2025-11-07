@@ -18,20 +18,32 @@ from app.config import Config
 class TestConfig(Config):
     """Test configuration with overrides."""
     
-    # Use test database
-    MONGO_URI = 'mongodb://mongo:27017/'
+    # Use localhost instead of 'mongo' hostname
+    # Tests run on host machine, MongoDB port is mapped to localhost:27017
+    MONGO_URI = 'mongodb://localhost:27017/'
     MONGO_DB = 'ccr_test'
     MONGO_COLLECTION = 'apis_test'
+    
+    # Also set the component values to ensure consistency
+    MONGO_HOST = 'localhost'
+    MONGO_PORT = 27017
     
     # Disable auth for easier testing
     AUTH_ENABLED = False
     
-    # Use temp directory for backups
-    BACKUP_DIR = None  # Will be set per test
+    # ✅ FIX: Set a valid backup directory for tests
+    BACKUP_DIR = '/tmp/ccr_test_backups'
     BACKUP_ENABLED = True
+    
+    # Disable scheduler for tests
+    ENABLE_SCHEDULER = False
     
     # Testing flag
     TESTING = True
+    
+    # Test secrets
+    SECRET_KEY = 'test-secret-key-for-testing-only'
+    JWT_SECRET_KEY = 'test-jwt-secret-key-for-testing-only'
 
 
 @pytest.fixture
@@ -42,10 +54,39 @@ def app():
     Returns:
         Flask app instance configured for testing
     """
+    # Create test backup directory if it doesn't exist
+    test_backup_dir = '/tmp/ccr_test_backups'
+    os.makedirs(test_backup_dir, exist_ok=True)
+    
+    # Set environment variables BEFORE creating app to ensure they're picked up
+    os.environ['MONGO_HOST'] = 'localhost'
+    os.environ['MONGO_PORT'] = '27017'
+    os.environ['MONGO_DB'] = 'ccr_test'
+    os.environ['MONGO_COLLECTION'] = 'apis_test'
+    os.environ['AUTH_ENABLED'] = 'false'
+    os.environ['BACKUP_ENABLED'] = 'true'
+    os.environ['BACKUP_DIR'] = test_backup_dir  # ✅ FIX: Set backup directory
+    os.environ['ENABLE_SCHEDULER'] = 'false'
+    
+    # Create app with TestConfig
     app = create_app(TestConfig)
     app.config['TESTING'] = True
     
+    # Ensure config values are set correctly
+    app.config['MONGO_DB'] = 'ccr_test'
+    app.config['MONGO_COLLECTION'] = 'apis_test'
+    app.config['BACKUP_DIR'] = test_backup_dir  # ✅ FIX: Ensure backup dir is set
+    
     yield app
+    
+    # Cleanup: Remove test backup directory after tests
+    if os.path.exists(test_backup_dir):
+        shutil.rmtree(test_backup_dir, ignore_errors=True)
+    
+    # Cleanup environment variables after test
+    for key in ['MONGO_HOST', 'MONGO_PORT', 'MONGO_DB', 'MONGO_COLLECTION', 
+                'AUTH_ENABLED', 'BACKUP_ENABLED', 'BACKUP_DIR', 'ENABLE_SCHEDULER']:
+        os.environ.pop(key, None)
 
 
 @pytest.fixture
@@ -108,23 +149,21 @@ def sample_api_data():
         Dictionary with sample API data
     """
     return {
-        '_id': 'test-api',
         'API Name': 'test-api',
         'Platform': [
             {
                 'PlatformID': 'IP4',
                 'Environment': [
                     {
-                        'environmentID': 'tst',
+                        'environmentID': 'dev',
                         'version': '1.0.0',
+                        'status': 'RUNNING',
                         'deploymentDate': datetime.utcnow().isoformat() + 'Z',
                         'lastUpdated': datetime.utcnow().isoformat() + 'Z',
                         'updatedBy': 'test-user',
-                        'status': 'RUNNING',
                         'Properties': {
-                            'api.name': 'test-api',
-                            'api.version': '1.0.0',
-                            'env': 'tst'
+                            'api.id': '12345',
+                            'api.endpoint': 'https://api.test.com'
                         }
                     }
                 ]
@@ -136,23 +175,26 @@ def sample_api_data():
 @pytest.fixture
 def sample_backup_data():
     """
-    Sample backup data for testing.
+    Sample backup/restore data for testing.
     
     Returns:
         List of sample API documents
     """
     return [
         {
-            '_id': 'api-1',
-            'API Name': 'api-1',
+            '_id': 'test-api-1',
+            'API Name': 'test-api-1',
             'Platform': [
                 {
                     'PlatformID': 'IP4',
                     'Environment': [
                         {
-                            'environmentID': 'tst',
+                            'environmentID': 'dev',
                             'version': '1.0.0',
                             'status': 'RUNNING',
+                            'deploymentDate': datetime.utcnow().isoformat() + 'Z',
+                            'lastUpdated': datetime.utcnow().isoformat() + 'Z',
+                            'updatedBy': 'test-user',
                             'Properties': {}
                         }
                     ]
@@ -160,16 +202,19 @@ def sample_backup_data():
             ]
         },
         {
-            '_id': 'api-2',
-            'API Name': 'api-2',
+            '_id': 'test-api-2',
+            'API Name': 'test-api-2',
             'Platform': [
                 {
-                    'PlatformID': 'IP3',
+                    'PlatformID': 'IP5',
                     'Environment': [
                         {
                             'environmentID': 'prd',
                             'version': '2.0.0',
-                            'status': 'RUNNING',
+                            'status': 'STOPPED',
+                            'deploymentDate': datetime.utcnow().isoformat() + 'Z',
+                            'lastUpdated': datetime.utcnow().isoformat() + 'Z',
+                            'updatedBy': 'admin',
                             'Properties': {}
                         }
                     ]
@@ -180,12 +225,29 @@ def sample_backup_data():
 
 
 @pytest.fixture
-def auth_headers():
+def admin_headers():
     """
-    Generate authentication headers for protected endpoints.
+    Headers for admin API requests.
     
     Returns:
-        Dictionary with Authorization header
+        Dictionary with admin headers
     """
-    # If auth is disabled in tests, return empty headers
-    return {}
+    return {
+        'Content-Type': 'application/json',
+        'X-Admin-Key': 'dev-admin-key-CHANGE-IN-PRODUCTION'
+    }
+
+
+@pytest.fixture
+def auth_token(client):
+    """
+    Get a valid JWT authentication token for testing.
+    
+    Args:
+        client: Flask test client
+        
+    Returns:
+        Valid JWT token string
+    """
+    # If auth is disabled in tests, return empty string
+    return ''

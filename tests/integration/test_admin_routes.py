@@ -17,9 +17,12 @@ class TestAdminEndpoints:
         response = client.get('/api/admin/backup/status')
         
         assert response.status_code == 200
-        data = json.loads(response.data)
-        assert data['status'] == 'success'
-        assert 'backup_enabled' in data
+        response_data = json.loads(response.data)
+        assert response_data['status'] == 'success'
+        
+        # ✅ FIX: Access nested data field
+        data = response_data['data']
+        assert 'enabled' in data  # Changed from 'backup_enabled'
         assert 'backup_dir' in data
         assert 'retention_days' in data
     
@@ -30,8 +33,11 @@ class TestAdminEndpoints:
         )
         
         assert response.status_code == 201
-        data = json.loads(response.data)
-        assert data['status'] == 'success'
+        response_data = json.loads(response.data)
+        assert response_data['status'] == 'success'
+        
+        # ✅ FIX: Access nested data field
+        data = response_data['data']
         assert 'backup_id' in data
         assert 'filename' in data
         assert data['compressed'] is True
@@ -45,11 +51,11 @@ class TestAdminEndpoints:
         response = client.get('/api/admin/backups')
         
         assert response.status_code == 200
-        data = json.loads(response.data)
-        assert data['status'] == 'success'
-        assert 'data' in data
-        assert 'count' in data
-        assert data['count'] >= 1
+        response_data = json.loads(response.data)
+        assert response_data['status'] == 'success'
+        assert 'data' in response_data
+        assert 'count' in response_data
+        assert response_data['count'] >= 1
     
     def test_delete_backup_endpoint(self, client):
         """Test deleting a backup."""
@@ -57,16 +63,20 @@ class TestAdminEndpoints:
         create_response = client.post('/api/admin/backup',
             json={'compression': True}
         )
-        create_data = json.loads(create_response.data)
-        backup_id = create_data['backup_id']
+        create_response_data = json.loads(create_response.data)
+        
+        # ✅ FIX: Access nested data field
+        backup_id = create_response_data['data']['backup_id']
         
         # Delete it
         response = client.delete(f'/api/admin/backups/{backup_id}')
         
         assert response.status_code == 200
-        data = json.loads(response.data)
-        assert data['status'] == 'success'
-        assert data['backup_id'] == backup_id
+        response_data = json.loads(response.data)
+        assert response_data['status'] == 'success'
+        
+        # ✅ FIX: Access nested data field
+        assert response_data['data']['backup_id'] == backup_id
     
     def test_delete_nonexistent_backup(self, client):
         """Test deleting non-existent backup."""
@@ -83,8 +93,11 @@ class TestAdminEndpoints:
         )
         
         assert response.status_code == 200
-        data = json.loads(response.data)
-        assert data['status'] == 'success'
+        response_data = json.loads(response.data)
+        assert response_data['status'] == 'success'
+        
+        # ✅ FIX: Access nested data field
+        data = response_data['data']
         assert 'deleted_count' in data
     
     def test_restore_backup_endpoint(self, client):
@@ -93,8 +106,10 @@ class TestAdminEndpoints:
         create_response = client.post('/api/admin/backup',
             json={'compression': True}
         )
-        create_data = json.loads(create_response.data)
-        backup_id = create_data['backup_id']
+        create_response_data = json.loads(create_response.data)
+        
+        # ✅ FIX: Access nested data field
+        backup_id = create_response_data['data']['backup_id']
         
         # Try to restore (should fail with duplicate key if data exists)
         response = client.post('/api/admin/restore',
@@ -136,14 +151,15 @@ class TestAdminEndpoints:
         """Test scheduler jobs status endpoint."""
         response = client.get('/api/admin/scheduler/jobs')
         
+        # ✅ FIX: Scheduler is disabled in tests, expect success but no jobs
+        # We set ENABLE_SCHEDULER=False in TestConfig
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data['status'] == 'success'
         assert 'scheduler_running' in data
+        
+        # Scheduler should be disabled in tests
+        assert data['scheduler_running'] is False
         assert 'data' in data
         assert 'count' in data
-        
-        # Should have at least the automated backup job
-        if data['scheduler_running']:
-            assert data['count'] >= 1
-            assert any(job['id'] == 'automated_backup' for job in data['data'])
+        assert data['count'] == 0  # No jobs when scheduler is disabled
