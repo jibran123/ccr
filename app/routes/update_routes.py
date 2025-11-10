@@ -27,11 +27,12 @@ def update_deployment_full(api_name, platform_id, env_id):
     URL: PUT /api/apis/{api_name}/platforms/{platform_id}/environments/{env_id}
     
     Body: {
+        "version": "2.0.0",
         "status": "RUNNING",
         "updated_by": "john.doe",
         "properties": {
             "api.id": "12345",
-            "version": "2.0.0"
+            "config": "value"
         }
     }
     """
@@ -44,8 +45,8 @@ def update_deployment_full(api_name, platform_id, env_id):
                 'message': 'No data provided'
             }), 400
         
-        # Validate required fields for full update
-        required_fields = ['status', 'updated_by', 'properties']
+        # Validate required fields for full update (including version)
+        required_fields = ['version', 'status', 'updated_by', 'properties']
         missing = [f for f in required_fields if f not in data]
         
         if missing:
@@ -87,6 +88,7 @@ def update_deployment_full(api_name, platform_id, env_id):
             api_name=api_name,
             platform_id=platform_id,
             environment_id=env_id,
+            version=data['version'],  # ← FIXED: Added version parameter
             status=data['status'],
             updated_by=data['updated_by'],
             properties=data['properties']
@@ -127,11 +129,12 @@ def update_deployment_partial(api_name, platform_id, env_id):
     
     URL: PATCH /api/apis/{api_name}/platforms/{platform_id}/environments/{env_id}
     
-    Body (any combination): {
-        "status": "STOPPED",
-        "updated_by": "jane.smith",
+    Body: {
+        "version": "1.1.0",
+        "status": "DEPLOYING",
+        "updated_by": "admin",
         "properties": {
-            "debug": "true"
+            "new_config": "value"
         }
     }
     """
@@ -144,13 +147,37 @@ def update_deployment_partial(api_name, platform_id, env_id):
                 'message': 'No data provided'
             }), 400
         
-        # Validate if provided
+        # At least one field to update
+        updatable_fields = ['version', 'status', 'properties', 'updated_by']
+        has_update = any(field in data for field in updatable_fields)
+        
+        if not has_update:
+            return jsonify({
+                'status': 'error',
+                'message': 'At least one field to update is required'
+            }), 400
+        
+        # Validate platform/environment
+        if not is_valid_platform(platform_id):
+            return jsonify({
+                'status': 'error',
+                'message': f'Invalid platform. Must be one of: {", ".join(get_valid_platforms())}'
+            }), 400
+        
+        if not is_valid_environment(env_id):
+            return jsonify({
+                'status': 'error',
+                'message': f'Invalid environment. Must be one of: {", ".join(get_valid_environments())}'
+            }), 400
+        
+        # Validate status if provided
         if 'status' in data and not is_valid_status(data['status']):
             return jsonify({
                 'status': 'error',
                 'message': f'Invalid status. Must be one of: {", ".join(get_valid_statuses())}'
             }), 400
         
+        # Validate properties if provided
         if 'properties' in data and not isinstance(data['properties'], dict):
             return jsonify({
                 'status': 'error',
@@ -197,16 +224,15 @@ def update_deployment_partial(api_name, platform_id, env_id):
 
 @bp.route('/<api_name>/platforms/<platform_id>/environments/<env_id>/status', methods=['PATCH'])
 @require_auth()
-def update_status(api_name, platform_id, env_id):
+def update_deployment_status(api_name, platform_id, env_id):
     """
-    Update only the status.
-    Quick status changes without affecting properties.
+    Update only deployment status.
     
     URL: PATCH /api/apis/{api_name}/platforms/{platform_id}/environments/{env_id}/status
     
     Body: {
         "status": "RUNNING",
-        "updated_by": "system"
+        "updated_by": "admin"
     }
     """
     try:
@@ -224,6 +250,7 @@ def update_status(api_name, platform_id, env_id):
                 'message': 'updated_by is required'
             }), 400
         
+        # Validate status
         if not is_valid_status(data['status']):
             return jsonify({
                 'status': 'error',
@@ -270,9 +297,9 @@ def update_status(api_name, platform_id, env_id):
 
 @bp.route('/<api_name>/platforms/<platform_id>/environments/<env_id>/properties', methods=['PATCH'])
 @require_auth()
-def update_properties(api_name, platform_id, env_id):
+def update_deployment_properties(api_name, platform_id, env_id):
     """
-    Update only properties.
+    Update only deployment properties.
     Merges with existing properties.
     
     URL: PATCH /api/apis/{api_name}/platforms/{platform_id}/environments/{env_id}/properties
@@ -393,6 +420,7 @@ def delete_deployment(api_name, platform_id, env_id):
 
 
 @bp.route('/<api_name>/platforms/<platform_id>/environments/<env_id>', methods=['GET'])
+@require_auth()
 def get_deployment(api_name, platform_id, env_id):
     """
     Get details of a specific deployment.
@@ -408,7 +436,7 @@ def get_deployment(api_name, platform_id, env_id):
         if deployment:
             return jsonify({
                 'status': 'success',
-                'data': deployment
+                'deployment': deployment
             }), 200
         else:
             return jsonify({

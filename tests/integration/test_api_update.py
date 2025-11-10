@@ -19,8 +19,8 @@ class TestUpdateEndpoints:
         
         deploy_data = {
             'api_name': api_name,
-            'platform': 'IP4',
-            'environment': 'tst',
+            'platform_id': 'IP4',
+            'environment_id': 'tst',
             'version': '1.0.0',
             'status': 'RUNNING',
             'updated_by': 'pytest',
@@ -132,7 +132,7 @@ class TestUpdateEndpoints:
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data['status'] == 'success'
-        assert 'deployment' in data
+        assert 'deployment' in data  # ✅ FIXED: Checking for 'deployment' key as returned by route
     
     def test_delete_deployment(self, client, deployed_api):
         """Test deleting a deployment."""

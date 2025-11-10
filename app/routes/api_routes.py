@@ -26,9 +26,15 @@ def search():
         
         # Validate pagination
         if page < 1:
-            return jsonify({'error': 'Page must be >= 1'}), 400
+            return jsonify({
+                'status': 'error',
+                'message': 'Page must be >= 1'
+            }), 400
         if page_size < 1 or page_size > 1000:
-            return jsonify({'error': 'Page size must be between 1 and 1000'}), 400
+            return jsonify({
+                'status': 'error',
+                'message': 'Page size must be between 1 and 1000'
+            }), 400
         
         logger.info(f"Search request: query='{query}', page={page}, page_size={page_size}")
         
@@ -58,7 +64,7 @@ def search():
                 'query': query,
                 'page': page,
                 'page_size': page_size,
-                'total_results': total_results,
+                'total': total_results,  # ✅ FIXED: Changed from 'total_results' to 'total'
                 'total_pages': total_pages,
                 'results_in_page': len(paginated_results)
             }
@@ -149,6 +155,14 @@ def export_data():
         data = request.get_json()
         query = data.get('query', '')
         format_type = data.get('format', 'json')
+        
+        # ✅ FIXED: Validate format parameter
+        valid_formats = ['json', 'csv']
+        if format_type not in valid_formats:
+            return jsonify({
+                'status': 'error',
+                'message': f'Invalid format. Must be one of: {", ".join(valid_formats)}'
+            }), 400
         
         # Get search results
         results = current_app.db_service.search_apis(

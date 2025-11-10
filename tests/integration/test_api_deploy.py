@@ -16,8 +16,8 @@ class TestDeployEndpoint:
         """Test deploying new API with minimal required fields."""
         deploy_data = {
             'api_name': f'test-deploy-{datetime.now().timestamp()}',
-            'platform': 'IP4',
-            'environment': 'tst',
+            'platform_id': 'IP4',  # ✅ FIXED: Changed from 'platform'
+            'environment_id': 'tst',  # ✅ FIXED: Changed from 'environment'
             'version': '1.0.0',
             'status': 'RUNNING',
             'updated_by': 'pytest'
@@ -31,15 +31,15 @@ class TestDeployEndpoint:
         assert response.status_code == 201
         data = json.loads(response.data)
         assert data['status'] == 'success'
-        assert 'api_name' in data
-        assert data['api_name'] == deploy_data['api_name']
+        assert 'data' in data  # ✅ FIXED: Response structure has 'data' wrapper
+        assert data['data']['api_name'] == deploy_data['api_name']
     
     def test_deploy_with_properties(self, client):
         """Test deploying API with properties."""
         deploy_data = {
             'api_name': f'test-props-{datetime.now().timestamp()}',
-            'platform': 'IP4',
-            'environment': 'tst',
+            'platform_id': 'IP4',  # ✅ FIXED: Changed from 'platform'
+            'environment_id': 'tst',  # ✅ FIXED: Changed from 'environment'
             'version': '1.0.0',
             'status': 'RUNNING',
             'updated_by': 'pytest',
@@ -66,8 +66,8 @@ class TestDeployEndpoint:
         # First deployment
         deploy_data_v1 = {
             'api_name': api_name,
-            'platform': 'IP4',
-            'environment': 'tst',
+            'platform_id': 'IP4',  # ✅ FIXED: Changed from 'platform'
+            'environment_id': 'tst',  # ✅ FIXED: Changed from 'environment'
             'version': '1.0.0',
             'status': 'RUNNING',
             'updated_by': 'pytest'
@@ -79,8 +79,8 @@ class TestDeployEndpoint:
         # Update with new version
         deploy_data_v2 = {
             'api_name': api_name,
-            'platform': 'IP4',
-            'environment': 'tst',
+            'platform_id': 'IP4',  # ✅ FIXED: Changed from 'platform'
+            'environment_id': 'tst',  # ✅ FIXED: Changed from 'environment'
             'version': '2.0.0',  # Changed
             'status': 'RUNNING',
             'updated_by': 'pytest'
@@ -96,8 +96,8 @@ class TestDeployEndpoint:
         """Test deploy with missing required field."""
         deploy_data = {
             'api_name': 'test-missing',
-            'platform': 'IP4',
-            # Missing 'environment'
+            'platform_id': 'IP4',  # ✅ FIXED: Changed from 'platform'
+            # Missing 'environment_id'
             'version': '1.0.0',
             'status': 'RUNNING',
             'updated_by': 'pytest'
@@ -114,8 +114,8 @@ class TestDeployEndpoint:
         """Test deploy with invalid platform."""
         deploy_data = {
             'api_name': 'test-invalid',
-            'platform': 'INVALID_PLATFORM',
-            'environment': 'tst',
+            'platform_id': 'INVALID_PLATFORM',  # ✅ FIXED: Changed from 'platform'
+            'environment_id': 'tst',  # ✅ FIXED: Changed from 'environment'
             'version': '1.0.0',
             'status': 'RUNNING',
             'updated_by': 'pytest'
@@ -131,8 +131,8 @@ class TestDeployEndpoint:
         """Test deploy with invalid status."""
         deploy_data = {
             'api_name': 'test-invalid-status',
-            'platform': 'IP4',
-            'environment': 'tst',
+            'platform_id': 'IP4',  # ✅ FIXED: Changed from 'platform'
+            'environment_id': 'tst',  # ✅ FIXED: Changed from 'environment'
             'version': '1.0.0',
             'status': 'INVALID_STATUS',
             'updated_by': 'pytest'
@@ -151,8 +151,8 @@ class TestDeployEndpoint:
         # Deploy to IP4
         deploy_ip4 = {
             'api_name': api_name,
-            'platform': 'IP4',
-            'environment': 'tst',
+            'platform_id': 'IP4',  # ✅ FIXED: Changed from 'platform'
+            'environment_id': 'tst',  # ✅ FIXED: Changed from 'environment'
             'version': '1.0.0',
             'status': 'RUNNING',
             'updated_by': 'pytest'
@@ -164,8 +164,8 @@ class TestDeployEndpoint:
         # Deploy same API to IP3
         deploy_ip3 = {
             'api_name': api_name,
-            'platform': 'IP3',
-            'environment': 'tst',
+            'platform_id': 'IP3',  # ✅ FIXED: Changed from 'platform'
+            'environment_id': 'tst',  # ✅ FIXED: Changed from 'environment'
             'version': '1.0.0',
             'status': 'RUNNING',
             'updated_by': 'pytest'

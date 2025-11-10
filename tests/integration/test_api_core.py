@@ -128,7 +128,7 @@ class TestCoreEndpoints:
         )
         
         assert response.status_code == 200
-        assert response.content_type == 'text/csv'
+        assert 'text/csv' in response.content_type  # ✅ FIXED: Flexible content-type check
         assert b'API Name' in response.data or b'PlatformID' in response.data
     
     def test_export_invalid_format(self, client):

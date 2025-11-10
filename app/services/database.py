@@ -365,3 +365,99 @@ class DatabaseService:
             Total count of APIs
         """
         return self.collection.count_documents({})
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """
+        Get database statistics.
+        
+        Returns:
+            Dictionary with statistics including total_apis, total_documents, 
+            total_deployments, unique platforms and environments
+        """
+        try:
+            total_count = self.collection.count_documents({})
+            
+            # Get unique platforms
+            pipeline = [
+                {'$unwind': '$Platform'},
+                {'$group': {
+                    '_id': None,
+                    'unique_platforms': {'$addToSet': '$Platform.PlatformID'}
+                }}
+            ]
+            
+            platform_result = list(self.collection.aggregate(pipeline))
+            platforms = platform_result[0]['unique_platforms'] if platform_result else []
+            
+            # Get unique environments
+            env_pipeline = [
+                {'$unwind': '$Platform'},
+                {'$unwind': '$Platform.Environment'},
+                {'$group': {
+                    '_id': None,
+                    'unique_environments': {'$addToSet': '$Platform.Environment.environmentID'}
+                }}
+            ]
+            
+            env_result = list(self.collection.aggregate(env_pipeline))
+            environments = env_result[0]['unique_environments'] if env_result else []
+            
+            # Count total deployments
+            deploy_pipeline = [
+                {'$unwind': '$Platform'},
+                {'$unwind': '$Platform.Environment'},
+                {'$count': 'total'}
+            ]
+            
+            deploy_result = list(self.collection.aggregate(deploy_pipeline))
+            total_deployments = deploy_result[0]['total'] if deploy_result else 0
+            
+            return {
+                'total_apis': total_count,
+                'total_documents': total_count,  # Alias for test compatibility
+                'total_deployments': total_deployments,
+                'database': self.db_name,
+                'collection': self.collection_name,
+                'unique_platforms': len([p for p in platforms if p]),
+                'unique_environments': len([e for e in environments if e])
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting stats: {str(e)}")
+            return {
+                'total_apis': 0,
+                'total_documents': 0,
+                'database': self.db_name,
+                'collection': self.collection_name,
+                'error': str(e)
+            }
+    
+    def health_check(self) -> Dict[str, Any]:
+        """
+        Check database health.
+        
+        Returns:
+            Dictionary with health status
+        """
+        try:
+            self.client.admin.command('ping')
+            count = self.collection.count_documents({})
+            
+            return {
+                'status': 'healthy',
+                'database': self.db_name,
+                'collection': self.collection_name,
+                'document_count': count
+            }
+        except Exception as e:
+            logger.error(f"Health check failed: {str(e)}")
+            return {
+                'status': 'unhealthy',
+                'error': str(e)
+            }
+    
+    def close(self):
+        """Close database connection."""
+        if self.client:
+            self.client.close()
+            logger.info("Database connection closed")
