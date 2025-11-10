@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 *.pyc
 *.pyo
+*.pyd
 
 # C extensions
 *.so
@@ -22,12 +23,9 @@ parts/
 sdist/
 var/
 wheels/
-pip-wheel-metadata/
-share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
 
 # PyInstaller
 *.manifest
@@ -46,11 +44,33 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
-*.log
+
+# Translations
+*.mo
+*.pot
 
 # Flask stuff
 instance/
 .webassets-cache
+
+# Scrapy stuff
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
 
 # Environments
 .env
@@ -61,13 +81,32 @@ ENV/
 env.bak/
 venv.bak/
 
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
 # IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-.DS_Store
+*.sublime-project
+*.sublime-workspace
 
 # Project specific
 backups/
@@ -76,15 +115,23 @@ backups/
 temp/
 tmp/
 
-# Database
+# Database files
 *.db
 *.sqlite
 *.sqlite3
 
-# Logs
+# Log files
 logs/
 *.log
 
-# OS
+# OS files
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# Python compiled files in specific locations
+app/__pycache__/
+app/*/__pycache__/
+app/*/*/__pycache__/
+tests/__pycache__/
+tests/*/__pycache__/
