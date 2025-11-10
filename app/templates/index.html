@@ -10,13 +10,9 @@
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
+        <!-- Header (No nav buttons) -->
         <header class="header">
             <h1>CCR API Manager</h1>
-            <div class="nav-buttons">
-                <button class="nav-btn active">Search</button>
-                <a href="/health" class="nav-btn">Health</a>
-            </div>
         </header>
 
         <!-- Search Section -->
@@ -31,84 +27,68 @@
                     
                     <div class="help-section">
                         <h4>1. Simple Text Search</h4>
-                        <p>Search with word boundaries (case insensitive). Does NOT search inside Properties.</p>
+                        <p>Search across API Name, Platform, and Environment with word boundaries (case insensitive).</p>
                         <ul>
-                            <li><code>blue</code> - Matches "ivp-test-app-blue", "blue-api"</li>
-                            <li><code>tst</code> - Matches "tst-api", environment="tst" (NOT "test-api")</li>
-                            <li><code>ip4</code> - Matches platform="IP4" (NOT "IP3" or "IP5")</li>
+                            <li><code>analytics</code> - Finds APIs with "analytics" in the name</li>
+                            <li><code>IP4</code> - Finds all IP4 platform deployments</li>
+                            <li><code>prod</code> - Finds all production environment deployments</li>
                         </ul>
-                        <p class="note">✓ Word boundary matching - "tst" won't match "test" or "latest"</p>
-                        <p class="note">✓ Always case insensitive</p>
-                        <p class="note">✓ Searches: API Name, Platform, Environment, Status, Version, UpdatedBy</p>
+                        <p class="note">💡 Tip: Simple search does NOT search inside Properties</p>
                     </div>
                     
                     <div class="help-section">
                         <h4>2. Attribute Search</h4>
-                        <p class="important">⚠️ Always case sensitive for values!</p>
-                        <p>Search specific fields using: <code>Attribute = value</code></p>
+                        <p>Search specific fields with operators (case sensitive values).</p>
                         <ul>
-                            <li><code>API NAME = ivp-test-app-blue</code> - Exact API name</li>
-                            <li><code>Platform = IP4</code> - Only deployments on IP4</li>
-                            <li><code>Environment = tst</code> - Only tst environment</li>
+                            <li><code>Platform = IP4</code> - Exact platform match</li>
+                            <li><code>Environment = prod</code> - Exact environment match</li>
                             <li><code>Status = RUNNING</code> - Only running APIs</li>
-                            <li><code>Version = 2.3.86</code> - Specific version</li>
-                            <li><code>UpdatedBy = Jibran Patel</code> - Updated by specific user</li>
+                            <li><code>Version >= 2.0</code> - Version 2.0 or higher</li>
                         </ul>
-                        <p class="note">Supported attributes: API NAME, Platform, Environment, Status, Version, UpdatedBy</p>
+                        <p class="note">💡 Tip: Use exact case for values (IP4 not ip4)</p>
                     </div>
                     
                     <div class="help-section">
                         <h4>3. Properties Search</h4>
-                        <p class="important">⚠️ Always case sensitive for both key and value!</p>
-                        <p>Search within Properties: <code>Properties : key = value</code></p>
+                        <p>Search within the Properties object (case sensitive).</p>
                         <ul>
-                            <li><code>Properties : env = tst</code> - Property env equals "tst"</li>
-                            <li><code>Properties : debug.logging = false</code> - Debug logging is "false" (string)</li>
-                            <li><code>Properties : mule.env = tst</code> - Nested property</li>
-                            <li><code>Properties : api.id = 2568991</code> - API ID</li>
+                            <li><code>Properties : env = production</code></li>
+                            <li><code>Properties : owner = team-alpha</code></li>
+                            <li><code>Properties : replicas >= 3</code></li>
                         </ul>
-                        <p class="note">💡 Property keys and values are case sensitive</p>
-                        <p class="note">💡 Values are stored as strings: 'true', 'false', not boolean</p>
+                        <p class="note">💡 Tip: Property keys and values are case-sensitive</p>
                     </div>
                     
                     <div class="help-section">
-                        <h4>4. Combined Search (AND / OR)</h4>
-                        
-                        <h5>AND Operator (Strict - Both Must Match):</h5>
+                        <h4>4. Logical Operations</h4>
+                        <p>Combine multiple conditions with AND/OR.</p>
                         <ul>
-                            <li><code>tst AND Platform = IP4</code><br>
-                                Shows ONLY rows where both "tst" exists AND platform is IP4</li>
-                            <li><code>Platform = IP4 AND Environment = tst</code><br>
-                                Shows ONLY IP4/tst deployments</li>
-                            <li><code>blue AND Status = RUNNING</code><br>
-                                Shows ONLY running deployments containing "blue"</li>
-                        </ul>
-                        
-                        <h5>OR Operator (Loose - Either Can Match):</h5>
-                        <ul>
-                            <li><code>tst OR Platform = IP4</code><br>
-                                Shows rows matching "tst" OR rows where platform is IP4</li>
-                            <li><code>Platform = IP3 OR Platform = IP4</code><br>
-                                Shows deployments on either IP3 or IP4</li>
-                        </ul>
-                        
-                        <h5>Complex Examples:</h5>
-                        <ul>
-                            <li><code>API NAME = ivp-test-app AND Platform = IP3 AND Environment = prd</code><br>
-                                Specific API on specific platform/environment</li>
-                            <li><code>RUNNING AND Properties : debug.logging = false</code><br>
-                                Running APIs with debug logging disabled</li>
+                            <li><code>Platform = IP4 AND Environment = prod</code></li>
+                            <li><code>Status = RUNNING OR Status = DEPLOYING</code></li>
+                            <li><code>Version >= 2.0 AND Platform = IP4</code></li>
                         </ul>
                     </div>
                     
-                    <div class="help-section important-notes">
-                        <h4>⚠️ Important Notes</h4>
+                    <div class="help-section">
+                        <h4>5. Available Operators</h4>
+                        <ul>
+                            <li><code>=</code> - Exact match</li>
+                            <li><code>!=</code> - Not equal</li>
+                            <li><code>&gt;</code>, <code>&lt;</code>, <code>&gt;=</code>, <code>&lt;=</code> - Comparisons</li>
+                            <li><code>contains</code> - Partial match</li>
+                            <li><code>startswith</code> - Starts with</li>
+                            <li><code>endswith</code> - Ends with</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="help-section">
+                        <h4>Quick Tips</h4>
                         <ul>
                             <li><strong>Simple text</strong>: Case insensitive, word boundaries</li>
                             <li><strong>Attributes</strong>: Case sensitive values (IP4 ≠ ip4)</li>
                             <li><strong>Properties</strong>: Case sensitive keys and values</li>
+                            <li><strong>Column Filters</strong>: Click filter icon (▼) in column headers to filter by specific values</li>
                             <li>Leave search empty to show all deployments</li>
-                            <li>Results show ONLY matching rows (row-level filtering)</li>
                         </ul>
                     </div>
                 </div>
@@ -120,11 +100,11 @@
                     <input 
                         type="text" 
                         id="searchInput" 
-                        placeholder="Enter search query..." 
+                        placeholder="Enter search query (or use column filters)..." 
                         class="search-input"
                     >
                     <button type="submit" class="search-btn">SEARCH</button>
-                    <button type="button" class="clear-btn" id="clearBtn">CLEAR</button>
+                    <button type="button" class="clear-btn" id="clearBtn">CLEAR ALL</button>
                 </div>
                 
                 <div class="search-options">
@@ -158,15 +138,81 @@
                 </div>
             </div>
             
-            <!-- Results Table -->
+            <!-- Results Table with Excel-style Column Filters -->
             <div class="table-container">
                 <table class="results-table" id="apiTable">
                     <thead>
                         <tr>
-                            <th>API Name</th>
+                            <th>
+                                API Name
+                                <span class="filter-icon" id="filterIconApiName" data-column="apiName">
+                                    <i class="fas fa-filter"></i>
+                                </span>
+                                <!-- Dropdown for API Name -->
+                                <div class="filter-dropdown" id="filterDropdownApiName" style="display: none;">
+                                    <div class="filter-dropdown-header">
+                                        <input type="text" class="filter-search" id="filterSearchApiName" placeholder="Search API names...">
+                                    </div>
+                                    <div class="filter-dropdown-options">
+                                        <label class="filter-option select-all">
+                                            <input type="checkbox" id="selectAllApiName" checked>
+                                            <span>(Select All)</span>
+                                        </label>
+                                        <div id="filterOptionsApiName" class="filter-options-list">
+                                            <!-- Options populated by JavaScript -->
+                                        </div>
+                                    </div>
+                                    <div class="filter-dropdown-footer">
+                                        <button class="filter-apply-btn" onclick="applyColumnFilter('apiName')">Apply</button>
+                                        <button class="filter-cancel-btn" onclick="closeFilterDropdown('apiName')">Cancel</button>
+                                    </div>
+                                </div>
+                            </th>
+                            <th>
+                                Platform
+                                <span class="filter-icon" id="filterIconPlatform" data-column="platform">
+                                    <i class="fas fa-filter"></i>
+                                </span>
+                                <!-- Dropdown for Platform -->
+                                <div class="filter-dropdown" id="filterDropdownPlatform" style="display: none;">
+                                    <div class="filter-dropdown-options no-search">
+                                        <label class="filter-option select-all">
+                                            <input type="checkbox" id="selectAllPlatform" checked>
+                                            <span>(Select All)</span>
+                                        </label>
+                                        <div id="filterOptionsPlatform" class="filter-options-list">
+                                            <!-- Options populated by JavaScript -->
+                                        </div>
+                                    </div>
+                                    <div class="filter-dropdown-footer">
+                                        <button class="filter-apply-btn" onclick="applyColumnFilter('platform')">Apply</button>
+                                        <button class="filter-cancel-btn" onclick="closeFilterDropdown('platform')">Cancel</button>
+                                    </div>
+                                </div>
+                            </th>
+                            <th>
+                                Environment
+                                <span class="filter-icon" id="filterIconEnvironment" data-column="environment">
+                                    <i class="fas fa-filter"></i>
+                                </span>
+                                <!-- Dropdown for Environment -->
+                                <div class="filter-dropdown" id="filterDropdownEnvironment" style="display: none;">
+                                    <div class="filter-dropdown-options no-search">
+                                        <label class="filter-option select-all">
+                                            <input type="checkbox" id="selectAllEnvironment" checked>
+                                            <span>(Select All)</span>
+                                        </label>
+                                        <div id="filterOptionsEnvironment" class="filter-options-list">
+                                            <!-- Options populated by JavaScript -->
+                                        </div>
+                                    </div>
+                                    <div class="filter-dropdown-footer">
+                                        <button class="filter-apply-btn" onclick="applyColumnFilter('environment')">Apply</button>
+                                        <button class="filter-cancel-btn" onclick="closeFilterDropdown('environment')">Cancel</button>
+                                    </div>
+                                </div>
+                            </th>
                             <th>Version</th>
-                            <th>Platform</th>
-                            <th>Environment</th>
                             <th>Deployment Date</th>
                             <th>Last Updated</th>
                             <th>Updated By</th>
@@ -182,6 +228,19 @@
             
             <!-- Pagination -->
             <div id="pagination" class="pagination"></div>
+        </div>
+    </div>
+
+    <!-- Properties Modal -->
+    <div id="propertiesModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>API Properties</h2>
+                <span class="modal-close">&times;</span>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Properties content will be inserted here -->
+            </div>
         </div>
     </div>
 
