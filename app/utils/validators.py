@@ -2,6 +2,15 @@
 Input validation utilities for API requests.
 
 Provides validation functions for deployment and update requests with detailed error messages.
+
+VALIDATION RULES:
+- api_name: 3-100 chars, alphanumeric + hyphen/underscore, cannot start/end with special chars
+- platform_id: STRICT - Only values from config.py allowed
+- environment_id: STRICT - Only values from config.py allowed  
+- status: STRICT - Only values from config.py allowed
+- version: Numbers separated by dots (e.g., 1.0.0, 2.3.86)
+- updated_by: 2-100 chars, supports full names with spaces, unicode, special chars
+- properties: MANDATORY - Must be valid JSON object (can be empty {})
 """
 
 from typing import Dict, Any, List, Tuple, Optional
@@ -59,7 +68,7 @@ def validate_deployment_request(data: Dict[str, Any]) -> Tuple[bool, Optional[Di
                 'platform_id': 'IP4',
                 'environment_id': 'tst',
                 'status': 'RUNNING',
-                'updated_by': 'username',
+                'updated_by': 'Jibran Patel',
                 'version': '1.0.0',
                 'properties': {}
             }
@@ -68,38 +77,39 @@ def validate_deployment_request(data: Dict[str, Any]) -> Tuple[bool, Optional[Di
     # Validate api_name
     api_name = str(data['api_name']).strip()
     if not validate_api_name(api_name):
-        errors['api_name'] = 'API Name must be 3-100 characters, alphanumeric with hyphens/underscores only'
+        errors['api_name'] = 'API Name must be 3-100 characters, alphanumeric with hyphens/underscores only, cannot start or end with special characters'
     
-    # Validate platform_id
+    # Validate platform_id - STRICT: Only config values allowed
     platform_id = str(data['platform_id']).strip()
-    if not validate_platform_id(platform_id):
-        errors['platform_id'] = 'Platform ID must be valid (e.g., IP2, IP3, IP4, IP5)'
+    if not validate_platform_id_strict(platform_id):
+        errors['platform_id'] = 'Platform ID must be a valid configured platform. Check /api/platforms for valid values.'
     
-    # Validate environment_id
+    # Validate environment_id - STRICT: Only config values allowed
     environment_id = str(data['environment_id']).strip()
-    if not validate_environment_id(environment_id):
-        errors['environment_id'] = 'Environment ID must be valid (e.g., prod, tst, dev, acc)'
+    if not validate_environment_id_strict(environment_id):
+        errors['environment_id'] = 'Environment ID must be a valid configured environment. Check /api/environments for valid values.'
     
-    # Validate status
+    # Validate status - STRICT: Only config values allowed
     status = str(data['status']).strip()
-    if not validate_status(status):
-        errors['status'] = 'Status must be one of: RUNNING, STOPPED, DEPLOYING, FAILED, MAINTENANCE'
+    if not validate_status_strict(status):
+        errors['status'] = 'Status must be a valid configured status. Check /api/statuses for valid values.'
     
-    # Validate updated_by
+    # Validate updated_by - RELAXED: Allow full names with spaces, parentheses, unicode
     updated_by = str(data['updated_by']).strip()
     if not validate_updated_by(updated_by):
-        errors['updated_by'] = 'Updated By must be 2-50 characters'
+        errors['updated_by'] = 'Updated By must be 2-100 characters (supports full names, spaces, and special characters)'
     
     # Validate optional version field
     if 'version' in data and data['version']:
         version = str(data['version']).strip()
         if not validate_version(version):
-            errors['version'] = 'Version must be valid format (e.g., 1.0.0, v2.1.3)'
+            errors['version'] = 'Version must be valid format (e.g., 1.0.0, 2.1.3, v1.2.3)'
     
-    # Validate optional properties field
-    if 'properties' in data and data['properties'] is not None:
-        if not isinstance(data['properties'], dict):
-            errors['properties'] = 'Properties must be a valid JSON object'
+    # Validate properties field - MANDATORY JSON object
+    if 'properties' not in data or data['properties'] is None:
+        errors['properties'] = 'Properties field is mandatory (can be empty object {})'
+    elif not isinstance(data['properties'], dict):
+        errors['properties'] = 'Properties must be a valid JSON object (dictionary)'
     
     if errors:
         return False, {
@@ -123,17 +133,23 @@ def validate_update_request(data: Dict[str, Any], is_patch: bool = False) -> Tup
     """
     errors = {}
     
-    # For PUT, all fields are required except properties
+    # For PUT, all fields are required
     if not is_patch:
         required_fields = {
             'version': 'Version',
             'status': 'Status',
-            'updated_by': 'Updated By'
+            'updated_by': 'Updated By',
+            'properties': 'Properties'
         }
         
         for field, display_name in required_fields.items():
-            if field not in data or data[field] is None or str(data[field]).strip() == '':
-                errors[field] = f"{display_name} is required for full update (PUT)"
+            if field not in data or data[field] is None:
+                if field == 'properties':
+                    errors[field] = f"{display_name} is mandatory (can be empty object {{}})"
+                elif field == 'version' and (data[field] == '' or str(data[field]).strip() == ''):
+                    errors[field] = f"{display_name} is required for full update (PUT)"
+                else:
+                    errors[field] = f"{display_name} is required for full update (PUT)"
     
     # For PATCH, at least one field must be provided
     if is_patch:
@@ -146,7 +162,7 @@ def validate_update_request(data: Dict[str, Any], is_patch: bool = False) -> Tup
                 'updateable_fields': updateable_fields,
                 'example': {
                     'status': 'STOPPED',
-                    'updated_by': 'username'
+                    'updated_by': 'Jibran Patel'
                 }
             }
     
@@ -154,24 +170,24 @@ def validate_update_request(data: Dict[str, Any], is_patch: bool = False) -> Tup
     if 'version' in data and data['version']:
         version = str(data['version']).strip()
         if not validate_version(version):
-            errors['version'] = 'Version must be valid format (e.g., 1.0.0, v2.1.3)'
+            errors['version'] = 'Version must be valid format (e.g., 1.0.0, 2.1.3, v1.2.3)'
     
-    # Validate status if provided
+    # Validate status if provided - STRICT
     if 'status' in data and data['status']:
         status = str(data['status']).strip()
-        if not validate_status(status):
-            errors['status'] = 'Status must be one of: RUNNING, STOPPED, DEPLOYING, FAILED, MAINTENANCE'
+        if not validate_status_strict(status):
+            errors['status'] = 'Status must be a valid configured status. Check /api/statuses for valid values.'
     
     # Validate updated_by if provided
     if 'updated_by' in data and data['updated_by']:
         updated_by = str(data['updated_by']).strip()
         if not validate_updated_by(updated_by):
-            errors['updated_by'] = 'Updated By must be 2-50 characters'
+            errors['updated_by'] = 'Updated By must be 2-100 characters (supports full names, spaces, and special characters)'
     
-    # Validate properties if provided
+    # Validate properties if provided - Must be JSON object
     if 'properties' in data and data['properties'] is not None:
         if not isinstance(data['properties'], dict):
-            errors['properties'] = 'Properties must be a valid JSON object'
+            errors['properties'] = 'Properties must be a valid JSON object (dictionary)'
     
     if errors:
         return False, {
@@ -197,77 +213,112 @@ def validate_api_name(api_name: str) -> bool:
         return False
     
     # Must match pattern: alphanumeric, hyphens, underscores, but not start/end with special chars
+    # Single char: just alphanumeric
+    # Multi char: start and end with alphanumeric, middle can have hyphens/underscores
     pattern = r'^[a-zA-Z0-9][a-zA-Z0-9_-]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$'
     return bool(re.match(pattern, api_name))
 
 
-def validate_platform_id(platform_id: str) -> bool:
+def validate_platform_id_strict(platform_id: str) -> bool:
     """
-    Validate platform ID.
-    Currently accepts: IP2, IP3, IP4, IP5 (case insensitive)
+    Validate platform ID - STRICT MODE.
+    Only allows values configured in config.py.
+    
+    This function dynamically checks against the config at runtime.
     """
     if not platform_id:
         return False
     
-    # For now, allow any reasonable platform ID format
-    # Can be made more restrictive based on actual platform list
-    valid_platforms = ['IP2', 'IP3', 'IP4', 'IP5']
-    return platform_id.upper() in valid_platforms or bool(re.match(r'^[A-Z0-9]{2,10}$', platform_id.upper()))
+    # Import here to avoid circular imports
+    try:
+        from app.config import is_valid_platform
+        return is_valid_platform(platform_id)
+    except ImportError:
+        # Fallback for testing without app context
+        # In production, config must be available
+        return False
 
 
-def validate_environment_id(environment_id: str) -> bool:
+def validate_environment_id_strict(environment_id: str) -> bool:
     """
-    Validate environment ID.
-    Common environments: prod, tst, dev, acc, uat, stg
+    Validate environment ID - STRICT MODE.
+    Only allows values configured in config.py.
+    
+    This function dynamically checks against the config at runtime.
     """
     if not environment_id:
         return False
     
-    # Allow common environment IDs (flexible for different naming conventions)
-    valid_envs = ['prod', 'production', 'tst', 'test', 'dev', 'development', 
-                  'acc', 'acceptance', 'uat', 'stg', 'staging', 'prd', 'prd-uitwijk']
-    
-    return environment_id.lower() in valid_envs or bool(re.match(r'^[a-z0-9_-]{2,20}$', environment_id.lower()))
+    # Import here to avoid circular imports
+    try:
+        from app.config import is_valid_environment
+        return is_valid_environment(environment_id)
+    except ImportError:
+        # Fallback for testing without app context
+        return False
 
 
-def validate_status(status: str) -> bool:
+def validate_status_strict(status: str) -> bool:
     """
-    Validate deployment status.
-    Allowed: RUNNING, STOPPED, DEPLOYING, FAILED, MAINTENANCE
+    Validate deployment status - STRICT MODE.
+    Only allows values configured in config.py.
+    
+    This function dynamically checks against the config at runtime.
     """
     if not status:
         return False
     
-    valid_statuses = ['RUNNING', 'STOPPED', 'DEPLOYING', 'FAILED', 'MAINTENANCE', 
-                     'ACTIVE', 'INACTIVE', 'PENDING', 'ERROR']
-    return status.upper() in valid_statuses
+    # Import here to avoid circular imports
+    try:
+        from app.config import is_valid_status
+        return is_valid_status(status)
+    except ImportError:
+        # Fallback for testing without app context
+        return False
 
 
 def validate_version(version: str) -> bool:
     """
     Validate version string.
-    Accepts: 1.0.0, v1.0.0, 2.1.3-beta, etc.
+    Accepts: 1.0.0, 2.3.86, v1.0.0, etc.
+    Numbers separated by dots.
     """
     if not version:
         return False
     
-    # Flexible version pattern
-    # Allows: 1.0.0, v1.0.0, 1.0, 1.0.0-beta, 1.0.0-rc.1, etc.
-    pattern = r'^v?\d+(\.\d+){0,3}(-[a-zA-Z0-9.-]+)?$'
+    # Flexible version pattern: digits separated by dots
+    # Allows: 1.0.0, 2.3.86, v2.1.3, 1.0, etc.
+    # Optional 'v' prefix, then digits with dots
+    pattern = r'^v?\d+(\.\d+){0,3}$'
     return bool(re.match(pattern, version))
 
 
 def validate_updated_by(updated_by: str) -> bool:
     """
-    Validate updated_by field (username or identifier).
-    - 2-50 characters
-    - Alphanumeric, dots, hyphens, underscores
+    Validate updated_by field (username or full name from Azure AD).
+    - 2-100 characters
+    - Supports full names with spaces (e.g., "Jibran Patel")
+    - Supports department info in parentheses (e.g., "Jibran Patel (DevOps Team)")
+    - Supports email addresses (e.g., "jibran.patel@company.com")
+    - Supports unicode characters for international names (e.g., "José García")
+    - Does NOT allow: newlines, tabs, control characters
     """
-    if not updated_by or len(updated_by) < 2 or len(updated_by) > 50:
+    if not updated_by or len(updated_by) < 2 or len(updated_by) > 100:
         return False
     
-    pattern = r'^[a-zA-Z0-9._-]+$'
-    return bool(re.match(pattern, updated_by))
+    # Allow almost anything except control characters (newlines, tabs, etc.)
+    # This supports:
+    # - Full names: "Jibran Patel"
+    # - With dept: "Jibran Patel (DevOps Team)"
+    # - Emails: "jibran.patel@company.com"
+    # - Unicode: "José García", "李明"
+    # - Special chars: dots, hyphens, underscores, parentheses, @, etc.
+    
+    # Check for forbidden characters (control characters)
+    if any(ord(char) < 32 or ord(char) == 127 for char in updated_by):
+        return False
+    
+    return True
 
 
 # ===========================
@@ -296,7 +347,7 @@ def validate_search_query(query: str) -> Tuple[bool, Optional[str]]:
     if '=' in query or '!=' in query or 'contains' in query.lower():
         # This looks like an attribute search, check syntax
         if not validate_attribute_search_syntax(query):
-            return False, 'Invalid attribute search syntax. Example: Platform = IP4 AND Environment = prod'
+            return False, 'Invalid attribute search syntax. Example: Platform = IP4 AND Environment = tst'
     
     # 3. Check for Properties search syntax
     if 'properties' in query.lower() and ':' in query:
@@ -363,23 +414,23 @@ def get_validation_example(endpoint: str) -> Dict[str, Any]:
             'environment_id': 'tst',
             'version': '1.0.0',
             'status': 'RUNNING',
-            'updated_by': 'username',
+            'updated_by': 'Jibran Patel',
             'properties': {
-                'owner': 'team-name',
+                'owner': 'DevOps Team',
                 'repo': 'https://github.com/org/repo'
             }
         },
         'update_full': {
             'version': '1.0.1',
             'status': 'RUNNING',
-            'updated_by': 'username',
+            'updated_by': 'Jibran Patel',
             'properties': {
-                'owner': 'team-name'
+                'owner': 'DevOps Team'
             }
         },
         'update_partial': {
             'status': 'STOPPED',
-            'updated_by': 'username'
+            'updated_by': 'Jibran Patel'
         }
     }
     

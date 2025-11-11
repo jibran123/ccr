@@ -3,6 +3,8 @@ Update routes for API management.
 
 PUT /api/apis/{api_name}/platforms/{platform_id}/environments/{env_id} - Full update
 PATCH /api/apis/{api_name}/platforms/{platform_id}/environments/{env_id} - Partial update
+PATCH /api/apis/{api_name}/platforms/{platform_id}/environments/{env_id}/status - Status only
+PATCH /api/apis/{api_name}/platforms/{platform_id}/environments/{env_id}/properties - Properties only
 GET /api/apis/{api_name}/platforms/{platform_id}/environments/{env_id} - Get deployment details
 DELETE /api/apis/{api_name}/platforms/{platform_id}/environments/{env_id} - Delete deployment
 """
@@ -45,7 +47,7 @@ def update_deployment_full(api_name, platform_id, env_id):
     {
         "version": "2.0.0",           # Required: Version string
         "status": "RUNNING",          # Required: Valid status
-        "updated_by": "username",     # Required: 2-50 chars
+        "updated_by": "username",     # Required: 2-100 chars
         "properties": {}              # Required: JSON object (can be empty)
     }
     
@@ -241,7 +243,7 @@ def update_deployment_partial(api_name, platform_id, env_id):
         
         logger.info(f"Partial update for {api_name} on {platform_id}/{env_id}")
         
-        # Call deployment service
+        # Call deployment service with correct parameter name: 'updates'
         from app.services.deploy_service import DeploymentService
         deploy_service = DeploymentService(current_app.db_service)
         
@@ -249,7 +251,7 @@ def update_deployment_partial(api_name, platform_id, env_id):
             api_name=api_name,
             platform_id=platform_id,
             environment_id=env_id,
-            update_data=data
+            updates=data  # ✅ FIXED: Changed from update_data to updates
         )
         
         if result['success']:
@@ -290,6 +292,281 @@ def update_deployment_partial(api_name, platform_id, env_id):
         }), 500
 
 
+@bp.route('/<api_name>/platforms/<platform_id>/environments/<env_id>/status', methods=['PATCH'])
+@require_auth()
+def update_deployment_status(api_name, platform_id, env_id):
+    """
+    Update only deployment status.
+    
+    Specialized endpoint for status changes without touching other fields.
+    
+    URL: PATCH /api/apis/{api_name}/platforms/{platform_id}/environments/{env_id}/status
+    
+    Request Body:
+    {
+        "status": "STOPPED",          # Required: Valid status
+        "updated_by": "username"      # Required: Who made the update
+    }
+    
+    Returns:
+        200 OK: Status updated successfully
+        400 Bad Request: Validation error
+        404 Not Found: Deployment doesn't exist
+        500 Internal Server Error: Update failed
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                'status': 'error',
+                'error': {
+                    'type': 'ValidationError',
+                    'message': 'Request body is required',
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                }
+            }), 400
+        
+        # Validate required fields
+        if 'status' not in data or not data['status']:
+            return jsonify({
+                'status': 'error',
+                'error': {
+                    'type': 'ValidationError',
+                    'message': 'Status is required',
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                }
+            }), 400
+        
+        if 'updated_by' not in data or not data['updated_by']:
+            return jsonify({
+                'status': 'error',
+                'error': {
+                    'type': 'ValidationError',
+                    'message': 'Updated By is required',
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                }
+            }), 400
+        
+        # Validate platform and environment
+        if not is_valid_platform(platform_id):
+            return jsonify({
+                'status': 'error',
+                'error': {
+                    'type': 'ValidationError',
+                    'message': f'Invalid platform: {platform_id}',
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                }
+            }), 400
+        
+        if not is_valid_environment(env_id):
+            return jsonify({
+                'status': 'error',
+                'error': {
+                    'type': 'ValidationError',
+                    'message': f'Invalid environment: {env_id}',
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                }
+            }), 400
+        
+        status = str(data['status']).strip()
+        updated_by = str(data['updated_by']).strip()
+        
+        logger.info(f"Status update for {api_name} on {platform_id}/{env_id} to {status} by {updated_by}")
+        
+        # Call deployment service
+        from app.services.deploy_service import DeploymentService
+        deploy_service = DeploymentService(current_app.db_service)
+        
+        result = deploy_service.update_status_only(
+            api_name=api_name,
+            platform_id=platform_id,
+            environment_id=env_id,
+            status=status,
+            updated_by=updated_by
+        )
+        
+        if result['success']:
+            logger.info(f"✅ Successfully updated status for {api_name} on {platform_id}/{env_id}")
+            return jsonify({
+                'status': 'success',
+                'message': result['message'],
+                'data': {
+                    'api_name': api_name,
+                    'platform': platform_id,
+                    'environment': env_id,
+                    'new_status': status,
+                    'action': 'updated',
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                }
+            }), 200
+        else:
+            status_code = 404 if 'not found' in result['message'].lower() else 500
+            logger.error(f"❌ Failed to update status: {result['message']}")
+            return jsonify({
+                'status': 'error',
+                'error': {
+                    'type': 'UpdateError',
+                    'message': result['message'],
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                }
+            }), status_code
+            
+    except Exception as e:
+        logger.error(f"❌ Status update error: {str(e)}", exc_info=True)
+        return jsonify({
+            'status': 'error',
+            'error': {
+                'type': 'InternalError',
+                'message': f'Status update failed: {str(e)}',
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            }
+        }), 500
+
+
+@bp.route('/<api_name>/platforms/<platform_id>/environments/<env_id>/properties', methods=['PATCH'])
+@require_auth()
+def update_deployment_properties(api_name, platform_id, env_id):
+    """
+    Update only deployment properties.
+    
+    Merges new properties with existing properties.
+    
+    URL: PATCH /api/apis/{api_name}/platforms/{platform_id}/environments/{env_id}/properties
+    
+    Request Body:
+    {
+        "updated_by": "username",     # Required: Who made the update
+        "properties": {               # Required: Properties to merge
+            "new_key": "new_value"
+        }
+    }
+    
+    Returns:
+        200 OK: Properties updated successfully
+        400 Bad Request: Validation error
+        404 Not Found: Deployment doesn't exist
+        500 Internal Server Error: Update failed
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                'status': 'error',
+                'error': {
+                    'type': 'ValidationError',
+                    'message': 'Request body is required',
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                }
+            }), 400
+        
+        # Validate required fields
+        if 'updated_by' not in data or not data['updated_by']:
+            return jsonify({
+                'status': 'error',
+                'error': {
+                    'type': 'ValidationError',
+                    'message': 'Updated By is required',
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                }
+            }), 400
+        
+        if 'properties' not in data or data['properties'] is None:
+            return jsonify({
+                'status': 'error',
+                'error': {
+                    'type': 'ValidationError',
+                    'message': 'Properties is required',
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                }
+            }), 400
+        
+        if not isinstance(data['properties'], dict):
+            return jsonify({
+                'status': 'error',
+                'error': {
+                    'type': 'ValidationError',
+                    'message': 'Properties must be a valid JSON object',
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                }
+            }), 400
+        
+        # Validate platform and environment
+        if not is_valid_platform(platform_id):
+            return jsonify({
+                'status': 'error',
+                'error': {
+                    'type': 'ValidationError',
+                    'message': f'Invalid platform: {platform_id}',
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                }
+            }), 400
+        
+        if not is_valid_environment(env_id):
+            return jsonify({
+                'status': 'error',
+                'error': {
+                    'type': 'ValidationError',
+                    'message': f'Invalid environment: {env_id}',
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                }
+            }), 400
+        
+        updated_by = str(data['updated_by']).strip()
+        properties = data['properties']
+        
+        logger.info(f"Properties update for {api_name} on {platform_id}/{env_id} by {updated_by}")
+        
+        # Call deployment service
+        from app.services.deploy_service import DeploymentService
+        deploy_service = DeploymentService(current_app.db_service)
+        
+        result = deploy_service.update_properties_only(
+            api_name=api_name,
+            platform_id=platform_id,
+            environment_id=env_id,
+            properties=properties,
+            updated_by=updated_by
+        )
+        
+        if result['success']:
+            logger.info(f"✅ Successfully updated properties for {api_name} on {platform_id}/{env_id}")
+            return jsonify({
+                'status': 'success',
+                'message': result['message'],
+                'data': {
+                    'api_name': api_name,
+                    'platform': platform_id,
+                    'environment': env_id,
+                    'action': 'updated',
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                }
+            }), 200
+        else:
+            status_code = 404 if 'not found' in result['message'].lower() else 500
+            logger.error(f"❌ Failed to update properties: {result['message']}")
+            return jsonify({
+                'status': 'error',
+                'error': {
+                    'type': 'UpdateError',
+                    'message': result['message'],
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                }
+            }), status_code
+            
+    except Exception as e:
+        logger.error(f"❌ Properties update error: {str(e)}", exc_info=True)
+        return jsonify({
+            'status': 'error',
+            'error': {
+                'type': 'InternalError',
+                'message': f'Properties update failed: {str(e)}',
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            }
+        }), 500
+
+
 @bp.route('/<api_name>/platforms/<platform_id>/environments/<env_id>', methods=['GET'])
 def get_deployment_details(api_name, platform_id, env_id):
     """
@@ -324,27 +601,27 @@ def get_deployment_details(api_name, platform_id, env_id):
                 }
             }), 400
         
-        # Fetch deployment
+        # Fetch deployment using correct method name
         from app.services.deploy_service import DeploymentService
         deploy_service = DeploymentService(current_app.db_service)
         
-        result = deploy_service.get_deployment(
+        deployment = deploy_service.get_deployment_status(  # ✅ FIXED: Changed from get_deployment
             api_name=api_name,
             platform_id=platform_id,
             environment_id=env_id
         )
         
-        if result['success']:
+        if deployment:
             return jsonify({
                 'status': 'success',
-                'data': result['deployment']
+                'data': deployment
             }), 200
         else:
             return jsonify({
                 'status': 'error',
                 'error': {
                     'type': 'NotFoundError',
-                    'message': result['message'],
+                    'message': f'Deployment not found: {api_name} on {platform_id}/{env_id}',
                     'timestamp': datetime.utcnow().isoformat() + 'Z'
                 }
             }), 404
