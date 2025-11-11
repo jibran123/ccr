@@ -118,7 +118,7 @@
                 </div>
             </form>
 
-            <!-- Error Container -->
+            <!-- Error Container (kept for backward compatibility, toast.js will handle errors) -->
             <div id="errorContainer" class="error-message" style="display: none;"></div>
         </div>
 
@@ -245,6 +245,9 @@
     </div>
 
     <!-- Scripts -->
+    <!-- Week 3-4 Step 2: Toast Notification System -->
+    <!-- IMPORTANT: Load toast.js BEFORE search.js so displayError() automatically uses toasts -->
+    <script src="{{ url_for('static', filename='js/toast.js') }}"></script>
     <script src="{{ url_for('static', filename='js/search.js') }}"></script>
 </body>
 </html>

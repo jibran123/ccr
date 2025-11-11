@@ -1,4 +1,4 @@
-// Complete search.js with Excel-style Column Filters
+// Complete search.js with Excel-style Column Filters + Toast Notifications
 let currentPage = 1;
 let currentPerPage = 100;
 let currentSearchQuery = '';
@@ -323,6 +323,18 @@ function applyFilters() {
     // Display filtered results
     displayAPIs(filteredResults);
     updateResultsCount(filteredResults.length);
+    
+    // ✅ TOAST: Show info toast when filters result in 0 APIs
+    const hasActiveFilters = columnFilters.apiName.length > 0 || 
+                            columnFilters.platform.length > 0 || 
+                            columnFilters.environment.length > 0;
+    
+    if (hasActiveFilters && filteredResults.length === 0 && allResults.length > 0) {
+        showInfo('No APIs match the current filters. Try adjusting your filter selection.', {
+            title: 'No Matches',
+            duration: 5000
+        });
+    }
 }
 
 function clearAllFiltersAndSearch() {
@@ -408,6 +420,14 @@ async function loadAPIs() {
         // Apply any existing filters
         applyFilters();
         
+        // ✅ TOAST: Show warning toast when search query returns 0 results
+        if (allResults.length === 0 && currentSearchQuery) {
+            showWarning(`No APIs found matching "${currentSearchQuery}"`, {
+                title: 'No Results',
+                duration: 5000
+            });
+        }
+        
         // Update pagination if metadata exists
         if (data.metadata) {
             updatePagination(data.metadata);
@@ -415,6 +435,7 @@ async function loadAPIs() {
         
     } catch (error) {
         console.error('Error loading APIs:', error);
+        // ✅ TOAST: displayError now automatically uses showError() toast via toast.js
         displayError('Failed to load APIs: ' + error.message);
     }
 }
@@ -512,6 +533,8 @@ function updateResultsCount(count) {
 }
 
 function displayError(message) {
+    // ✅ TOAST: This function now triggers toast notifications automatically
+    // toast.js provides backward-compatible displayError() that calls showError()
     const errorContainer = document.getElementById('errorContainer');
     if (errorContainer) {
         errorContainer.textContent = message;
@@ -598,7 +621,11 @@ function exportResults(format) {
     const dataToExport = filteredResults.length > 0 ? filteredResults : allResults;
     
     if (dataToExport.length === 0) {
-        alert('No data to export');
+        // ✅ TOAST: Replace alert with toast warning
+        showWarning('No data available to export. Try adjusting your search or filters.', {
+            title: 'Export Failed',
+            duration: 5000
+        });
         return;
     }
     
@@ -620,6 +647,11 @@ function exportJSON(data) {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+    
+    // ✅ TOAST: Success notification after export
+    showSuccess(`Exported ${data.length} API${data.length !== 1 ? 's' : ''} to JSON`, {
+        duration: 3000
+    });
 }
 
 function exportCSV(data) {
@@ -654,6 +686,11 @@ function exportCSV(data) {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+    
+    // ✅ TOAST: Success notification after export
+    showSuccess(`Exported ${data.length} API${data.length !== 1 ? 's' : ''} to CSV`, {
+        duration: 3000
+    });
 }
 
 // ==========================
