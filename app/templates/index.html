@@ -102,6 +102,7 @@
                         id="searchInput" 
                         placeholder="Enter search query (or use column filters)..." 
                         class="search-input"
+                        maxlength="500"
                     >
                     <button type="submit" class="search-btn">SEARCH</button>
                     <button type="button" class="clear-btn" id="clearBtn">CLEAR ALL</button>
@@ -151,7 +152,7 @@
                                 <!-- Dropdown for API Name -->
                                 <div class="filter-dropdown" id="filterDropdownApiName" style="display: none;">
                                     <div class="filter-dropdown-header">
-                                        <input type="text" class="filter-search" id="filterSearchApiName" placeholder="Search API names...">
+                                        <input type="text" class="filter-search" id="filterSearchApiName" placeholder="Search API names..." maxlength="100">
                                     </div>
                                     <div class="filter-dropdown-options">
                                         <label class="filter-option select-all">
@@ -246,8 +247,10 @@
 
     <!-- Scripts -->
     <!-- Week 3-4 Step 2: Toast Notification System -->
-    <!-- IMPORTANT: Load toast.js BEFORE search.js so displayError() automatically uses toasts -->
+    <!-- Week 3-4 Step 3: Validation Library (NEW) -->
+    <!-- IMPORTANT: Load in order: toast.js → validation.js → search.js -->
     <script src="{{ url_for('static', filename='js/toast.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/validation.js') }}"></script>
     <script src="{{ url_for('static', filename='js/search.js') }}"></script>
 </body>
 </html>

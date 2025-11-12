@@ -1,4 +1,4 @@
-// Complete search.js with Excel-style Column Filters + Toast Notifications
+// Complete search.js with Excel-style Column Filters + Frontend Validation
 let currentPage = 1;
 let currentPerPage = 100;
 let currentSearchQuery = '';
@@ -21,7 +21,7 @@ let availableValues = {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Initializing CCR API Manager with Excel-style Column Filters...');
+    console.log('Initializing CCR API Manager with validation...');
     initializeApp();
 });
 
@@ -32,12 +32,25 @@ function initializeApp() {
 }
 
 function setupEventListeners() {
-    // Search form submission
+    // Search form submission with validation
     const searchForm = document.getElementById('searchForm');
     if (searchForm) {
         searchForm.addEventListener('submit', function(e) {
             e.preventDefault();
             performSearch();
+        });
+    }
+    
+    // Real-time validation on search input
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        // Debounce validation to avoid too many checks
+        let validationTimeout;
+        searchInput.addEventListener('input', function(e) {
+            clearTimeout(validationTimeout);
+            validationTimeout = setTimeout(() => {
+                validateSearchInput(e.target);
+            }, 500);
         });
     }
     
@@ -69,59 +82,35 @@ function setupEventListeners() {
     }
     
     // ==========================
-    // FILTER ICON CLICK HANDLERS
+    // FILTER ICON CLICKS
     // ==========================
     
-    // API Name filter icon
-    const apiNameIcon = document.getElementById('filterIconApiName');
-    if (apiNameIcon) {
-        apiNameIcon.addEventListener('click', (e) => {
+    const filterIcons = document.querySelectorAll('.filter-icon');
+    filterIcons.forEach(icon => {
+        icon.addEventListener('click', function(e) {
             e.stopPropagation();
-            toggleFilterDropdown('apiName');
+            const columnName = this.dataset.column;
+            toggleFilterDropdown(columnName);
+        });
+    });
+    
+    // Add input event listeners for filter search boxes
+    const filterSearchApiName = document.getElementById('filterSearchApiName');
+    if (filterSearchApiName) {
+        filterSearchApiName.addEventListener('input', function() {
+            // Validate filter input
+            if (window.ValidationLib) {
+                const result = window.ValidationLib.validateFilterInput(this.value);
+                if (result.valid) {
+                    filterDropdownOptions('apiName');
+                }
+            } else {
+                filterDropdownOptions('apiName');
+            }
         });
     }
     
-    // Platform filter icon
-    const platformIcon = document.getElementById('filterIconPlatform');
-    if (platformIcon) {
-        platformIcon.addEventListener('click', (e) => {
-            e.stopPropagation();
-            toggleFilterDropdown('platform');
-        });
-    }
-    
-    // Environment filter icon
-    const environmentIcon = document.getElementById('filterIconEnvironment');
-    if (environmentIcon) {
-        environmentIcon.addEventListener('click', (e) => {
-            e.stopPropagation();
-            toggleFilterDropdown('environment');
-        });
-    }
-    
-    // Search within API Name dropdown
-    const apiNameSearch = document.getElementById('filterSearchApiName');
-    if (apiNameSearch) {
-        apiNameSearch.addEventListener('input', () => filterDropdownOptions('apiName'));
-    }
-    
-    // Select All checkboxes
-    const selectAllApiName = document.getElementById('selectAllApiName');
-    if (selectAllApiName) {
-        selectAllApiName.addEventListener('change', () => toggleSelectAll('apiName'));
-    }
-    
-    const selectAllPlatform = document.getElementById('selectAllPlatform');
-    if (selectAllPlatform) {
-        selectAllPlatform.addEventListener('change', () => toggleSelectAll('platform'));
-    }
-    
-    const selectAllEnvironment = document.getElementById('selectAllEnvironment');
-    if (selectAllEnvironment) {
-        selectAllEnvironment.addEventListener('change', () => toggleSelectAll('environment'));
-    }
-    
-    // Close dropdowns when clicking outside
+    // Click outside to close dropdowns
     document.addEventListener('click', function(e) {
         const dropdowns = document.querySelectorAll('.filter-dropdown');
         dropdowns.forEach(dropdown => {
@@ -130,6 +119,76 @@ function setupEventListeners() {
             }
         });
     });
+}
+
+// ==========================
+// VALIDATION FUNCTIONS
+// ==========================
+
+/**
+ * Validate search input field in real-time
+ * @param {HTMLInputElement} inputElement - Search input element
+ */
+function validateSearchInput(inputElement) {
+    if (!window.ValidationLib) {
+        console.warn('Validation library not loaded');
+        return true;
+    }
+    
+    const value = inputElement.value;
+    const result = window.ValidationLib.validateSearchQuery(value);
+    
+    // Visual feedback
+    if (!result.valid && value.length > 0) {
+        inputElement.style.borderColor = '#dc2626';
+        inputElement.style.backgroundColor = '#fef2f2';
+    } else {
+        inputElement.style.borderColor = '';
+        inputElement.style.backgroundColor = '';
+    }
+    
+    return result.valid;
+}
+
+/**
+ * Sanitize and validate before performing search
+ * @returns {boolean} True if validation passed
+ */
+function validateBeforeSearch() {
+    const searchInput = document.getElementById('searchInput');
+    const query = searchInput.value;
+    
+    // If validation library is available, use it
+    if (window.ValidationLib) {
+        const result = window.ValidationLib.validateSearchQuery(query);
+        
+        if (!result.valid) {
+            // Show error via toast
+            if (window.showToast) {
+                window.showToast(result.error, 'error', { duration: 5000 });
+            } else {
+                alert(result.error);
+            }
+            
+            // Visual feedback
+            searchInput.style.borderColor = '#dc2626';
+            searchInput.style.backgroundColor = '#fef2f2';
+            searchInput.focus();
+            
+            return false;
+        }
+        
+        // Update input with sanitized value
+        if (result.sanitized !== query) {
+            searchInput.value = result.sanitized;
+        }
+        
+        // Clear visual feedback
+        searchInput.style.borderColor = '';
+        searchInput.style.backgroundColor = '';
+    }
+    
+    return true;
 }
 
 // ==========================
@@ -178,11 +237,16 @@ function populateFilterDropdown(columnName) {
     values.forEach(value => {
         const isChecked = columnFilters[columnName].length === 0 || columnFilters[columnName].includes(value);
         
+        // Use validation library's escapeHtml if available, otherwise use local function
+        const escapedValue = window.ValidationLib ? 
+            window.ValidationLib.escapeHtml(value) : 
+            escapeHtml(value);
+        
         const label = document.createElement('label');
         label.className = 'filter-option';
         label.innerHTML = `
-            <input type="checkbox" value="${escapeHtml(value)}" ${isChecked ? 'checked' : ''}>
-            <span>${escapeHtml(value)}</span>
+            <input type="checkbox" value="${escapedValue}" ${isChecked ? 'checked' : ''}>
+            <span>${escapedValue}</span>
         `;
         
         optionsContainer.appendChild(label);
@@ -197,52 +261,59 @@ function filterDropdownOptions(columnName) {
     if (columnName !== 'apiName') return;
     
     const searchInput = document.getElementById('filterSearchApiName');
-    const query = searchInput.value.toLowerCase();
+    let query = searchInput.value.toLowerCase();
+    
+    // Sanitize filter search input
+    if (window.ValidationLib) {
+        const result = window.ValidationLib.validateFilterInput(query);
+        if (result.valid && result.sanitized) {
+            query = result.sanitized.toLowerCase();
+        }
+    }
     
     const optionsContainer = document.getElementById('filterOptionsApiName');
     const options = optionsContainer.querySelectorAll('.filter-option');
     
     options.forEach(option => {
         const text = option.textContent.toLowerCase();
-        option.style.display = text.includes(query) ? 'flex' : 'none';
-    });
-}
-
-function toggleSelectAll(columnName) {
-    const selectAllCheckbox = document.getElementById(`selectAll${capitalize(columnName)}`);
-    const optionsContainer = document.getElementById(`filterOptions${capitalize(columnName)}`);
-    const checkboxes = optionsContainer.querySelectorAll('input[type="checkbox"]');
-    
-    checkboxes.forEach(checkbox => {
-        checkbox.checked = selectAllCheckbox.checked;
+        option.style.display = text.includes(query) ? '' : 'none';
     });
 }
 
 function updateSelectAllCheckbox(columnName) {
     const selectAllCheckbox = document.getElementById(`selectAll${capitalize(columnName)}`);
     const optionsContainer = document.getElementById(`filterOptions${capitalize(columnName)}`);
+    
+    if (!selectAllCheckbox || !optionsContainer) return;
+    
     const checkboxes = optionsContainer.querySelectorAll('input[type="checkbox"]');
+    const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
     
-    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
-    const noneChecked = Array.from(checkboxes).every(cb => !cb.checked);
+    selectAllCheckbox.checked = checkedCount === checkboxes.length;
+    selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
     
-    selectAllCheckbox.checked = allChecked;
-    selectAllCheckbox.indeterminate = !allChecked && !noneChecked;
+    // Add event listener for Select All
+    selectAllCheckbox.onclick = function() {
+        const newState = this.checked;
+        checkboxes.forEach(cb => cb.checked = newState);
+    };
 }
 
 function applyColumnFilter(columnName) {
     const optionsContainer = document.getElementById(`filterOptions${capitalize(columnName)}`);
-    const checkboxes = optionsContainer.querySelectorAll('input[type="checkbox"]:checked');
+    const checkboxes = optionsContainer.querySelectorAll('input[type="checkbox"]');
     
     // Get selected values
-    const selectedValues = Array.from(checkboxes).map(cb => cb.value);
+    const selectedValues = Array.from(checkboxes)
+        .filter(cb => cb.checked)
+        .map(cb => cb.value);
     
-    console.log(`Applying filter for ${columnName}:`, selectedValues);
+    console.log(`${columnName} filter applied:`, selectedValues);
     
     // Update filter state
     columnFilters[columnName] = selectedValues;
     
-    // Update filter icon to show active state
+    // Update icon state
     updateFilterIcon(columnName);
     
     // Close dropdown
@@ -256,7 +327,7 @@ function updateFilterIcon(columnName) {
     const icon = document.getElementById(`filterIcon${capitalize(columnName)}`);
     if (!icon) return;
     
-    // Check if filter is active (not all values selected)
+    // Active if some (but not all) values are selected
     const allValues = availableValues[columnName] || [];
     const selectedValues = columnFilters[columnName] || [];
     
@@ -323,25 +394,16 @@ function applyFilters() {
     // Display filtered results
     displayAPIs(filteredResults);
     updateResultsCount(filteredResults.length);
-    
-    // ✅ TOAST: Show info toast when filters result in 0 APIs
-    const hasActiveFilters = columnFilters.apiName.length > 0 || 
-                            columnFilters.platform.length > 0 || 
-                            columnFilters.environment.length > 0;
-    
-    if (hasActiveFilters && filteredResults.length === 0 && allResults.length > 0) {
-        showInfo('No APIs match the current filters. Try adjusting your filter selection.', {
-            title: 'No Matches',
-            duration: 5000
-        });
-    }
 }
 
 function clearAllFiltersAndSearch() {
     console.log('Clearing ALL filters and search');
     
     // Clear search input
-    document.getElementById('searchInput').value = '';
+    const searchInput = document.getElementById('searchInput');
+    searchInput.value = '';
+    searchInput.style.borderColor = '';
+    searchInput.style.backgroundColor = '';
     currentSearchQuery = '';
     
     // Clear all column filters
@@ -366,8 +428,22 @@ function clearAllFiltersAndSearch() {
 // ==========================
 
 function performSearch() {
+    // Validate search input before proceeding
+    if (!validateBeforeSearch()) {
+        return;
+    }
+    
     const searchInput = document.getElementById('searchInput');
     currentSearchQuery = searchInput.value.trim();
+    
+    // Sanitize if validation library available
+    if (window.ValidationLib) {
+        const result = window.ValidationLib.validateSearchQuery(currentSearchQuery);
+        if (result.valid && result.sanitized) {
+            currentSearchQuery = result.sanitized;
+        }
+    }
+    
     currentPage = 1;
     
     console.log('Performing search:', currentSearchQuery);
@@ -399,95 +475,97 @@ async function loadAPIs() {
         }
         
         const data = await response.json();
-        console.log('Response data:', data);
         
-        // Extract results from response
-        if (data.status === 'success' && data.data) {
-            allResults = data.data;
-        } else if (data.apis) {
-            allResults = data.apis;
-        } else if (Array.isArray(data)) {
-            allResults = data;
-        } else {
-            allResults = [];
+        if (data.status === 'error') {
+            throw new Error(data.error?.message || data.message || 'Search failed');
         }
         
-        console.log('Number of results:', allResults.length);
+        // Store all results for filtering
+        allResults = data.data || [];
+        filteredResults = allResults;
         
-        // Extract available filter values
+        console.log(`Loaded ${allResults.length} APIs`);
+        
+        // Extract filter values from results
         extractFilterValues();
         
-        // Apply any existing filters
-        applyFilters();
-        
-        // ✅ TOAST: Show warning toast when search query returns 0 results
-        if (allResults.length === 0 && currentSearchQuery) {
-            showWarning(`No APIs found matching "${currentSearchQuery}"`, {
-                title: 'No Results',
-                duration: 5000
-            });
-        }
-        
-        // Update pagination if metadata exists
-        if (data.metadata) {
-            updatePagination(data.metadata);
-        }
+        // Display results
+        displayAPIs(filteredResults);
+        updateResultsCount(filteredResults.length);
+        updatePagination(data.pagination || {});
         
     } catch (error) {
         console.error('Error loading APIs:', error);
-        // ✅ TOAST: displayError now automatically uses showError() toast via toast.js
-        displayError('Failed to load APIs: ' + error.message);
+        
+        // Show error via toast if available
+        if (window.showToast) {
+            window.showToast(
+                `Failed to load APIs: ${error.message}`,
+                'error',
+                { duration: 8000 }
+            );
+        }
+        
+        // Display error in table
+        displayError(`Error loading APIs: ${error.message}`);
     }
 }
-
-// ==========================
-// DISPLAY FUNCTIONS
-// ==========================
 
 function displayAPIs(apis) {
     const tbody = document.getElementById('apiTableBody');
     
     if (!tbody) {
-        console.error('Table body element not found!');
+        console.error('Table body element not found');
         return;
     }
     
+    // Clear existing rows
     tbody.innerHTML = '';
     
     if (!apis || apis.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="no-results">No APIs found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="no-results">No results found</td></tr>';
+        
+        // Show toast notification for empty results
+        if (currentSearchQuery && window.showToast) {
+            window.showToast(
+                `No results found for: "${currentSearchQuery}"`,
+                'info',
+                { duration: 4000 }
+            );
+        }
         return;
     }
     
-    // Display each row with REORDERED COLUMNS
-    apis.forEach((api) => {
+    // Populate table
+    apis.forEach(api => {
         const tr = document.createElement('tr');
         
-        // Handle field names from backend
         const apiName = api['API Name'] || api.apiName || 'N/A';
         const platform = api.PlatformID || api.platform || 'N/A';
         const environment = api.Environment || api.environment || 'N/A';
         const version = api.Version || api.version || 'N/A';
-        const deploymentDate = api.DeploymentDate || api.deploymentDate || 'N/A';
+        const deployDate = api.DeploymentDate || api.deploymentDate || 'N/A';
         const lastUpdated = api.LastUpdated || api.lastUpdated || 'N/A';
         const updatedBy = api.UpdatedBy || api.updatedBy || 'N/A';
         const status = api.Status || api.status || 'UNKNOWN';
         const properties = api.Properties || api.properties || {};
         
-        const statusClass = getStatusClass(status);
+        // Use validation library's escapeHtml if available
+        const escape = window.ValidationLib ? 
+            window.ValidationLib.escapeHtml : 
+            escapeHtml;
         
-        // NEW COLUMN ORDER: API Name, Platform, Environment, Version, Deployment Date, Last Updated, Updated By, Status, Properties
         tr.innerHTML = `
-            <td class="api-name">${escapeHtml(apiName)}</td>
-            <td>${escapeHtml(platform)}</td>
-            <td>${escapeHtml(environment)}</td>
-            <td class="api-version">${escapeHtml(version)}</td>
-            <td>${escapeHtml(deploymentDate)}</td>
-            <td>${escapeHtml(lastUpdated)}</td>
-            <td>${escapeHtml(updatedBy)}</td>
-            <td><span class="status-badge ${statusClass}">${escapeHtml(status)}</span></td>
+            <td class="api-name">${escape(apiName)}</td>
+            <td>${escape(platform)}</td>
+            <td>${escape(environment)}</td>
+            <td class="api-version">${escape(version)}</td>
+            <td>${formatDate(deployDate)}</td>
+            <td>${formatDate(lastUpdated)}</td>
+            <td>${escape(updatedBy)}</td>
+            <td><span class="status-badge ${getStatusClass(status)}">${escape(status)}</span></td>
             <td>
-                <button onclick='viewProperties(${JSON.stringify(properties)}, "${escapeHtml(apiName)}")' class="btn-view">
+                <button onclick='viewProperties(${JSON.stringify(properties)}, "${escape(apiName)}")' class="btn-view">
                     <i class="fas fa-eye"></i> View
                 </button>
             </td>
@@ -533,17 +611,15 @@ function updateResultsCount(count) {
 }
 
 function displayError(message) {
-    // ✅ TOAST: This function now triggers toast notifications automatically
-    // toast.js provides backward-compatible displayError() that calls showError()
-    const errorContainer = document.getElementById('errorContainer');
-    if (errorContainer) {
-        errorContainer.textContent = message;
-        errorContainer.style.display = 'block';
-        
-        // Auto-hide after 5 seconds
-        setTimeout(() => {
-            errorContainer.style.display = 'none';
-        }, 5000);
+    const tbody = document.getElementById('apiTableBody');
+    if (tbody) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="9" class="error-message">
+                    <strong>Error:</strong> ${escapeHtml(message)}
+                </td>
+            </tr>
+        `;
     }
 }
 
@@ -552,65 +628,64 @@ function displayError(message) {
 // ==========================
 
 function createPropertiesModal() {
-    // Modal already exists in HTML, just set up close handler
     const modal = document.getElementById('propertiesModal');
     if (!modal) return;
     
+    // Close modal when clicking X
     const closeBtn = modal.querySelector('.modal-close');
     if (closeBtn) {
-        closeBtn.addEventListener('click', function() {
-            modal.classList.remove('active');
+        closeBtn.onclick = function() {
             modal.style.display = 'none';
-        });
+        };
     }
     
-    // Close on outside click
-    modal.addEventListener('click', function(e) {
-        if (e.target === modal) {
-            modal.classList.remove('active');
+    // Close modal when clicking outside
+    window.onclick = function(event) {
+        if (event.target === modal) {
             modal.style.display = 'none';
         }
-    });
+    };
 }
 
 function viewProperties(properties, apiName) {
     const modal = document.getElementById('propertiesModal');
     const modalBody = document.getElementById('modalBody');
     
-    if (!modal || !modalBody) {
-        alert('Modal not available');
-        return;
-    }
+    if (!modal || !modalBody) return;
     
-    // Update modal header
-    const modalHeader = modal.querySelector('.modal-header h2');
-    if (modalHeader && apiName) {
-        modalHeader.textContent = `Properties - ${apiName}`;
-    }
+    // Use validation library's escapeHtml if available
+    const escape = window.ValidationLib ? 
+        window.ValidationLib.escapeHtml : 
+        escapeHtml;
     
-    // Build properties HTML
+    // Build properties table
+    let html = `<h3>Properties for: ${escape(apiName)}</h3>`;
+    
     if (!properties || Object.keys(properties).length === 0) {
-        modalBody.innerHTML = '<div class="no-properties">No properties available</div>';
+        html += '<p>No properties defined.</p>';
     } else {
-        let propertiesHtml = '<table class="properties-table"><thead><tr><th>Key</th><th>Value</th></tr></thead><tbody>';
+        html += '<table class="properties-table">';
+        html += '<thead><tr><th>Key</th><th>Value</th></tr></thead>';
+        html += '<tbody>';
         
-        Object.entries(properties).forEach(([key, value]) => {
-            const displayValue = typeof value === 'object' ? JSON.stringify(value, null, 2) : value;
-            propertiesHtml += `
+        for (const [key, value] of Object.entries(properties)) {
+            const displayValue = typeof value === 'object' ? 
+                JSON.stringify(value, null, 2) : 
+                String(value);
+            
+            html += `
                 <tr>
-                    <td class="property-key">${escapeHtml(key)}</td>
-                    <td class="property-value">${escapeHtml(String(displayValue))}</td>
+                    <td><strong>${escape(key)}</strong></td>
+                    <td><pre>${escape(displayValue)}</pre></td>
                 </tr>
             `;
-        });
+        }
         
-        propertiesHtml += '</tbody></table>';
-        modalBody.innerHTML = propertiesHtml;
+        html += '</tbody></table>';
     }
     
-    // Show modal
-    modal.style.display = 'flex';
-    modal.classList.add('active');
+    modalBody.innerHTML = html;
+    modal.style.display = 'block';
 }
 
 // ==========================
@@ -621,98 +696,87 @@ function exportResults(format) {
     const dataToExport = filteredResults.length > 0 ? filteredResults : allResults;
     
     if (dataToExport.length === 0) {
-        // ✅ TOAST: Replace alert with toast warning
-        showWarning('No data available to export. Try adjusting your search or filters.', {
-            title: 'Export Failed',
-            duration: 5000
-        });
+        if (window.showToast) {
+            window.showToast('No data to export', 'warning', { duration: 3000 });
+        } else {
+            alert('No data to export');
+        }
         return;
     }
     
     if (format === 'json') {
-        exportJSON(dataToExport);
+        exportAsJson(dataToExport);
     } else if (format === 'csv') {
-        exportCSV(dataToExport);
+        exportAsCsv(dataToExport);
     }
 }
 
-function exportJSON(data) {
-    const jsonString = JSON.stringify(data, null, 2);
-    const blob = new Blob([jsonString], { type: 'application/json' });
+function exportAsJson(data) {
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `ccr-api-export-${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ccr-apis-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
     
-    // ✅ TOAST: Success notification after export
-    showSuccess(`Exported ${data.length} API${data.length !== 1 ? 's' : ''} to JSON`, {
-        duration: 3000
-    });
+    if (window.showToast) {
+        window.showToast('Export completed successfully', 'success', { duration: 3000 });
+    }
 }
 
-function exportCSV(data) {
+function exportAsCsv(data) {
+    if (data.length === 0) return;
+    
     // CSV headers
-    const headers = ['API Name', 'Platform', 'Environment', 'Version', 'Deployment Date', 'Last Updated', 'Updated By', 'Status'];
+    const headers = ['API Name', 'Platform', 'Environment', 'Version', 'Status', 'Updated By', 'Last Updated'];
+    let csv = headers.join(',') + '\n';
     
-    // Build CSV content
-    let csvContent = headers.join(',') + '\n';
-    
+    // CSV rows
     data.forEach(api => {
         const row = [
             api['API Name'] || api.apiName || '',
             api.PlatformID || api.platform || '',
             api.Environment || api.environment || '',
             api.Version || api.version || '',
-            api.DeploymentDate || api.deploymentDate || '',
-            api.LastUpdated || api.lastUpdated || '',
+            api.Status || api.status || '',
             api.UpdatedBy || api.updatedBy || '',
-            api.Status || api.status || ''
+            api.LastUpdated || api.lastUpdated || ''
         ].map(field => `"${String(field).replace(/"/g, '""')}"`);
         
-        csvContent += row.join(',') + '\n';
+        csv += row.join(',') + '\n';
     });
     
-    // Download
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `ccr-api-export-${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ccr-apis-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
     
-    // ✅ TOAST: Success notification after export
-    showSuccess(`Exported ${data.length} API${data.length !== 1 ? 's' : ''} to CSV`, {
-        duration: 3000
-    });
+    if (window.showToast) {
+        window.showToast('Export completed successfully', 'success', { duration: 3000 });
+    }
 }
 
 // ==========================
-// UTILITY FUNCTIONS
+// PAGINATION
 // ==========================
 
-function escapeHtml(text) {
-    if (text === null || text === undefined) return '';
-    const div = document.createElement('div');
-    div.textContent = String(text);
-    return div.innerHTML;
-}
-
-function capitalize(str) {
-    return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
-function updatePagination(metadata) {
+function updatePagination(pagination) {
     const paginationDiv = document.getElementById('pagination');
     if (!paginationDiv) return;
     
-    const { page, total_pages } = metadata;
+    const page = pagination.page || currentPage;
+    const total_pages = pagination.total_pages || 1;
     
     if (total_pages <= 1) {
         paginationDiv.innerHTML = '';
@@ -737,3 +801,39 @@ function changePage(page) {
     currentPage = page;
     loadAPIs();
 }
+
+// ==========================
+// UTILITY FUNCTIONS
+// ==========================
+
+function capitalize(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function formatDate(dateStr) {
+    if (!dateStr || dateStr === 'N/A') return 'N/A';
+    
+    try {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return dateStr;
+        return date.toLocaleString();
+    } catch {
+        return dateStr;
+    }
+}
+
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    
+    return String(text).replace(/[&<>"']/g, m => map[m]);
+}
+
+console.log('✅ Search.js loaded with validation support');
