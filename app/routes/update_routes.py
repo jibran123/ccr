@@ -373,11 +373,25 @@ def update_deployment_status(api_name, platform_id, env_id):
         updated_by = str(data['updated_by']).strip()
         
         logger.info(f"Status update for {api_name} on {platform_id}/{env_id} to {status} by {updated_by}")
-        
+
+        # Get old status for audit logging
+        old_status = None
+        try:
+            api_doc = current_app.db_service.collection.find_one({'_id': api_name})
+            if api_doc:
+                for platform in api_doc.get('Platform', []):
+                    if platform.get('PlatformID') == platform_id:
+                        for env in platform.get('Environment', []):
+                            if env.get('environmentID') == env_id:
+                                old_status = env.get('status')
+                                break
+        except Exception as e:
+            logger.warning(f"Could not retrieve old status for audit log: {e}")
+
         # Call deployment service
         from app.services.deploy_service import DeploymentService
         deploy_service = DeploymentService(current_app.db_service)
-        
+
         result = deploy_service.update_status_only(
             api_name=api_name,
             platform_id=platform_id,
@@ -385,9 +399,24 @@ def update_deployment_status(api_name, platform_id, env_id):
             status=status,
             updated_by=updated_by
         )
-        
+
         if result['success']:
             logger.info(f"✅ Successfully updated status for {api_name} on {platform_id}/{env_id}")
+
+            # Log to audit trail
+            try:
+                audit_service = current_app.audit_service
+                audit_service.log_status_change(
+                    api_name=api_name,
+                    platform_id=platform_id,
+                    environment_id=env_id,
+                    old_status=old_status or 'UNKNOWN',
+                    new_status=status,
+                    changed_by=updated_by
+                )
+            except Exception as audit_error:
+                logger.error(f"Failed to create audit log: {audit_error}")
+
             return jsonify({
                 'status': 'success',
                 'message': result['message'],
@@ -674,19 +703,63 @@ def delete_deployment(api_name, platform_id, env_id):
             }), 400
         
         logger.info(f"Deleting deployment {api_name} on {platform_id}/{env_id}")
-        
+
+        # Get old state for audit logging before deletion
+        old_state = None
+        try:
+            api_doc = current_app.db_service.collection.find_one({'_id': api_name})
+            if api_doc:
+                for platform in api_doc.get('Platform', []):
+                    if platform.get('PlatformID') == platform_id:
+                        for env in platform.get('Environment', []):
+                            if env.get('environmentID') == env_id:
+                                old_state = {
+                                    'version': env.get('version'),
+                                    'status': env.get('status'),
+                                    'properties': env.get('Properties', {})
+                                }
+                                break
+        except Exception as e:
+            logger.warning(f"Could not retrieve old state for audit log: {e}")
+
         # Call deployment service
         from app.services.deploy_service import DeploymentService
         deploy_service = DeploymentService(current_app.db_service)
-        
+
         result = deploy_service.delete_deployment(
             api_name=api_name,
             platform_id=platform_id,
             environment_id=env_id
         )
-        
+
         if result['success']:
             logger.info(f"✅ Successfully deleted {api_name} on {platform_id}/{env_id}")
+
+            # Log to audit trail
+            try:
+                from app.utils.auth import get_current_user
+                # Get current user for audit log
+                changed_by = "Unknown"
+                try:
+                    user = get_current_user()
+                    if user:
+                        changed_by = user.get('username') or user.get('sub', 'Unknown')
+                    else:
+                        changed_by = "System"
+                except:
+                    changed_by = "System"
+
+                audit_service = current_app.audit_service
+                audit_service.log_deletion(
+                    api_name=api_name,
+                    platform_id=platform_id,
+                    environment_id=env_id,
+                    changed_by=changed_by,
+                    old_state=old_state
+                )
+            except Exception as audit_error:
+                logger.error(f"Failed to create audit log: {audit_error}")
+
             return jsonify({
                 'status': 'success',
                 'message': result['message'],

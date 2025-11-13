@@ -113,7 +113,25 @@ def deploy_api():
         if result['success']:
             status_code = 201 if result['action'] == 'created' else 200
             logger.info(f"✅ Successfully deployed {api_name} v{version} to {platform_id}/{environment_id} ({result['action']})")
-            
+
+            # Log to audit trail
+            try:
+                audit_service = current_app.audit_service
+                is_new = result['action'] == 'created'
+                audit_service.log_deployment(
+                    api_name=api_name,
+                    platform_id=platform_id,
+                    environment_id=environment_id,
+                    version=version,
+                    status=status,
+                    changed_by=updated_by,
+                    properties=properties,
+                    is_new=is_new
+                )
+            except Exception as audit_error:
+                # Don't fail the deployment if audit logging fails
+                logger.error(f"Failed to create audit log: {audit_error}")
+
             return jsonify({
                 'status': 'success',
                 'message': result['message'],
