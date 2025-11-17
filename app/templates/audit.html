@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+
+{% block title %}Audit Logs - CCR API Manager{% endblock %}
+
+{% block additional_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/audit.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="audit-container">
+    <header class="audit-header">
+        <h1><i class="fas fa-clipboard-list"></i> Audit Logs</h1>
+        <p>Complete audit trail of all API deployment changes</p>
+    </header>
+
+    <!-- Tab Navigation -->
+    <div class="tab-navigation">
+        <button class="tab-btn active" data-tab="logs">
+            <i class="fas fa-list"></i> Audit Logs
+        </button>
+        <button class="tab-btn" data-tab="timeline">
+            <i class="fas fa-stream"></i> Timeline View
+        </button>
+        <button class="tab-btn" data-tab="statistics">
+            <i class="fas fa-chart-bar"></i> Statistics
+        </button>
+        <button class="tab-btn" data-tab="activity">
+            <i class="fas fa-user-clock"></i> User Activity
+        </button>
+    </div>
+
+    <!-- Tab: Audit Logs -->
+    <div class="tab-content active" id="tab-logs">
+        <!-- Filters Section -->
+        <div class="filters-section">
+            <h3><i class="fas fa-filter"></i> Filters</h3>
+            <form id="auditFilterForm">
+                <div class="filter-grid">
+                    <div class="filter-item">
+                        <label for="filterApiName">API Name</label>
+                        <input type="text" id="filterApiName" placeholder="Enter API name..." maxlength="100">
+                    </div>
+
+                    <div class="filter-item">
+                        <label for="filterUser">Changed By</label>
+                        <input type="text" id="filterUser" placeholder="Username..." maxlength="50">
+                    </div>
+
+                    <div class="filter-item">
+                        <label for="filterAction">Action Type</label>
+                        <select id="filterAction">
+                            <option value="">All Actions</option>
+                            <!-- Options populated by JavaScript -->
+                        </select>
+                    </div>
+
+                    <div class="filter-item">
+                        <label for="filterPlatform">Platform</label>
+                        <select id="filterPlatform">
+                            <option value="">All Platforms</option>
+                            <option value="IP2">IP2 (TIBCO BW)</option>
+                            <option value="IP3">IP3 (TIBCO BW Container Edition)</option>
+                            <option value="IP4">IP4 (Kubernetes)</option>
+                            <option value="IP5">IP5 (OpenShift)</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-item">
+                        <label for="filterEnvironment">Environment</label>
+                        <select id="filterEnvironment">
+                            <option value="">All Environments</option>
+                            <option value="prd">Production (prd)</option>
+                            <option value="int">Integration (int)</option>
+                            <option value="tst">Test (tst)</option>
+                            <option value="dev">Development (dev)</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-item">
+                        <label for="filterDateRange">Time Range</label>
+                        <select id="filterDateRange">
+                            <option value="24">Last 24 hours</option>
+                            <option value="72">Last 3 days</option>
+                            <option value="168">Last 7 days</option>
+                            <option value="720">Last 30 days</option>
+                            <option value="custom">Custom Range</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Custom Date Range (hidden by default) -->
+                <div class="custom-date-range" id="customDateRange" style="display: none;">
+                    <div class="filter-grid">
+                        <div class="filter-item">
+                            <label for="filterStartDate">Start Date</label>
+                            <input type="datetime-local" id="filterStartDate">
+                        </div>
+                        <div class="filter-item">
+                            <label for="filterEndDate">End Date</label>
+                            <input type="datetime-local" id="filterEndDate">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="filter-actions">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search"></i> Apply Filters
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="clearFiltersBtn">
+                        <i class="fas fa-times"></i> Clear Filters
+                    </button>
+                    <button type="button" class="btn btn-success" id="exportAuditBtn">
+                        <i class="fas fa-download"></i> Export
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Results Section -->
+        <div class="results-section">
+            <div class="results-header">
+                <h3 id="auditResultCount">
+                    <i class="fas fa-clipboard-check"></i> Audit Logs <span id="auditCount">(0)</span>
+                </h3>
+                <div class="results-options">
+                    <select id="auditResultsPerPage">
+                        <option value="25">25 per page</option>
+                        <option value="50" selected>50 per page</option>
+                        <option value="100">100 per page</option>
+                        <option value="200">200 per page</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Audit Logs Table -->
+            <div class="table-container">
+                <table class="audit-table" id="auditTable">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Action</th>
+                            <th>API Name</th>
+                            <th>Platform</th>
+                            <th>Environment</th>
+                            <th>Changed By</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody id="auditTableBody">
+                        <tr>
+                            <td colspan="7" class="no-data">
+                                <i class="fas fa-info-circle"></i> No audit logs found. Apply filters to search.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <div id="auditPagination" class="pagination"></div>
+        </div>
+    </div>
+
+    <!-- Tab: Timeline View -->
+    <div class="tab-content" id="tab-timeline">
+        <div class="timeline-section">
+            <h3><i class="fas fa-stream"></i> API Change Timeline</h3>
+
+            <!-- API Selector for Timeline -->
+            <div class="timeline-filters">
+                <div class="filter-item">
+                    <label for="timelineApiName">Select API</label>
+                    <input type="text" id="timelineApiName" placeholder="Enter API name..." maxlength="100">
+                </div>
+                <button type="button" class="btn btn-primary" id="loadTimelineBtn">
+                    <i class="fas fa-search"></i> Load Timeline
+                </button>
+            </div>
+
+            <!-- Timeline Container -->
+            <div id="timelineContainer" class="timeline-container">
+                <div class="no-data">
+                    <i class="fas fa-info-circle"></i> Enter an API name and click "Load Timeline" to view its change history.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab: Statistics -->
+    <div class="tab-content" id="tab-statistics">
+        <div class="statistics-section">
+            <h3><i class="fas fa-chart-bar"></i> Audit Statistics</h3>
+
+            <!-- Stats Grid -->
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-clipboard-list"></i></div>
+                    <div class="stat-content">
+                        <h4>Total Logs</h4>
+                        <p class="stat-value" id="statTotalLogs">-</p>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-clock"></i></div>
+                    <div class="stat-content">
+                        <h4>Recent 24h</h4>
+                        <p class="stat-value" id="statRecent24h">-</p>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-calendar-check"></i></div>
+                    <div class="stat-content">
+                        <h4>Retention Days</h4>
+                        <p class="stat-value" id="statRetentionDays">-</p>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-users"></i></div>
+                    <div class="stat-content">
+                        <h4>Active Users</h4>
+                        <p class="stat-value" id="statActiveUsers">-</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="charts-section">
+                <div class="chart-card">
+                    <h4><i class="fas fa-chart-pie"></i> Actions by Type</h4>
+                    <div id="actionTypeChart" class="chart-container"></div>
+                </div>
+
+                <div class="chart-card">
+                    <h4><i class="fas fa-user-friends"></i> Top Users</h4>
+                    <div id="topUsersChart" class="chart-container"></div>
+                </div>
+            </div>
+
+            <div class="stats-actions">
+                <button type="button" class="btn btn-primary" id="refreshStatsBtn">
+                    <i class="fas fa-sync-alt"></i> Refresh Statistics
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab: User Activity -->
+    <div class="tab-content" id="tab-activity">
+        <div class="activity-section">
+            <h3><i class="fas fa-user-clock"></i> User Activity</h3>
+
+            <!-- User Selector -->
+            <div class="activity-filters">
+                <div class="filter-item">
+                    <label for="activityUsername">Username</label>
+                    <input type="text" id="activityUsername" placeholder="Enter username..." maxlength="50">
+                </div>
+                <div class="filter-item">
+                    <label for="activityLimit">Results Limit</label>
+                    <select id="activityLimit">
+                        <option value="25">25 entries</option>
+                        <option value="50" selected>50 entries</option>
+                        <option value="100">100 entries</option>
+                        <option value="200">200 entries</option>
+                    </select>
+                </div>
+                <button type="button" class="btn btn-primary" id="loadActivityBtn">
+                    <i class="fas fa-search"></i> Load Activity
+                </button>
+            </div>
+
+            <!-- Activity Results -->
+            <div class="activity-results" id="activityResults">
+                <div class="no-data">
+                    <i class="fas fa-info-circle"></i> Enter a username and click "Load Activity" to view their change history.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Details Modal -->
+<div id="auditDetailsModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2><i class="fas fa-info-circle"></i> Audit Log Details</h2>
+            <span class="modal-close">&times;</span>
+        </div>
+        <div class="modal-body" id="auditModalBody">
+            <!-- Details will be inserted here -->
+        </div>
+    </div>
+</div>
+
+<!-- Export Options Modal -->
+<div id="exportModal" class="modal">
+    <div class="modal-content modal-small">
+        <div class="modal-header">
+            <h2><i class="fas fa-download"></i> Export Audit Logs</h2>
+            <span class="modal-close">&times;</span>
+        </div>
+        <div class="modal-body">
+            <p>Choose export format:</p>
+            <div class="export-options">
+                <button class="btn btn-primary" id="exportJsonFormat">
+                    <i class="fas fa-file-code"></i> JSON
+                </button>
+                <button class="btn btn-primary" id="exportCsvFormat">
+                    <i class="fas fa-file-csv"></i> CSV
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block additional_js %}
+<script src="{{ url_for('static', filename='js/toast.js') }}"></script>
+<script src="{{ url_for('static', filename='js/audit.js') }}"></script>
+{% endblock %}

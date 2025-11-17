@@ -1,256 +1,247 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CCR API Manager</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
-    <!-- Add Font Awesome for icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-</head>
-<body>
-    <div class="container">
-        <!-- Header (No nav buttons) -->
-        <header class="header">
-            <h1>CCR API Manager</h1>
-        </header>
+{% extends "base.html" %}
 
-        <!-- Search Section -->
-        <div class="search-section">
-            <h2>API Search</h2>
-            
-            <!-- Search Help & Examples (Collapsible) -->
-            <details class="search-help">
-                <summary>Search Help & Examples</summary>
-                <div class="help-content">
-                    <h3>Search Syntax Guide</h3>
-                    
-                    <div class="help-section">
-                        <h4>1. Simple Text Search</h4>
-                        <p>Search across API Name, Platform, and Environment with word boundaries (case insensitive).</p>
-                        <ul>
-                            <li><code>analytics</code> - Finds APIs with "analytics" in the name</li>
-                            <li><code>IP4</code> - Finds all IP4 platform deployments</li>
-                            <li><code>prod</code> - Finds all production environment deployments</li>
-                        </ul>
-                        <p class="note">💡 Tip: Simple search does NOT search inside Properties</p>
-                    </div>
-                    
-                    <div class="help-section">
-                        <h4>2. Attribute Search</h4>
-                        <p>Search specific fields with operators (case sensitive values).</p>
-                        <ul>
-                            <li><code>Platform = IP4</code> - Exact platform match</li>
-                            <li><code>Environment = prod</code> - Exact environment match</li>
-                            <li><code>Status = RUNNING</code> - Only running APIs</li>
-                            <li><code>Version >= 2.0</code> - Version 2.0 or higher</li>
-                        </ul>
-                        <p class="note">💡 Tip: Use exact case for values (IP4 not ip4)</p>
-                    </div>
-                    
-                    <div class="help-section">
-                        <h4>3. Properties Search</h4>
-                        <p>Search within the Properties object (case sensitive).</p>
-                        <ul>
-                            <li><code>Properties : env = production</code></li>
-                            <li><code>Properties : owner = team-alpha</code></li>
-                            <li><code>Properties : replicas >= 3</code></li>
-                        </ul>
-                        <p class="note">💡 Tip: Property keys and values are case-sensitive</p>
-                    </div>
-                    
-                    <div class="help-section">
-                        <h4>4. Logical Operations</h4>
-                        <p>Combine multiple conditions with AND/OR.</p>
-                        <ul>
-                            <li><code>Platform = IP4 AND Environment = prod</code></li>
-                            <li><code>Status = RUNNING OR Status = DEPLOYING</code></li>
-                            <li><code>Version >= 2.0 AND Platform = IP4</code></li>
-                        </ul>
-                    </div>
-                    
-                    <div class="help-section">
-                        <h4>5. Available Operators</h4>
-                        <ul>
-                            <li><code>=</code> - Exact match</li>
-                            <li><code>!=</code> - Not equal</li>
-                            <li><code>&gt;</code>, <code>&lt;</code>, <code>&gt;=</code>, <code>&lt;=</code> - Comparisons</li>
-                            <li><code>contains</code> - Partial match</li>
-                            <li><code>startswith</code> - Starts with</li>
-                            <li><code>endswith</code> - Ends with</li>
-                        </ul>
-                    </div>
-                    
-                    <div class="help-section">
-                        <h4>Quick Tips</h4>
-                        <ul>
-                            <li><strong>Simple text</strong>: Case insensitive, word boundaries</li>
-                            <li><strong>Attributes</strong>: Case sensitive values (IP4 ≠ ip4)</li>
-                            <li><strong>Properties</strong>: Case sensitive keys and values</li>
-                            <li><strong>Column Filters</strong>: Click filter icon (▼) in column headers to filter by specific values</li>
-                            <li>Leave search empty to show all deployments</li>
-                        </ul>
-                    </div>
+{% block title %}API Search - CCR API Manager{% endblock %}
+
+{% block additional_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+{% endblock %}
+
+{% block content %}
+<!-- Search Section -->
+<div class="search-section">
+        <h2>API Search</h2>
+
+        <!-- Search Help & Examples (Collapsible) -->
+        <details class="search-help">
+            <summary>Search Help & Examples</summary>
+            <div class="help-content">
+                <h3>Search Syntax Guide</h3>
+
+                <div class="help-section">
+                    <h4>1. Simple Text Search</h4>
+                    <p>Search across API Name, Platform, and Environment with word boundaries (case insensitive).</p>
+                    <ul>
+                        <li><code>analytics</code> - Finds APIs with "analytics" in the name</li>
+                        <li><code>IP4</code> - Finds all IP4 platform deployments</li>
+                        <li><code>prod</code> - Finds all production environment deployments</li>
+                    </ul>
+                    <p class="note">💡 Tip: Simple search does NOT search inside Properties</p>
                 </div>
-            </details>
 
-            <!-- Search Form -->
-            <form id="searchForm">
-                <div class="search-input-group">
-                    <input 
-                        type="text" 
-                        id="searchInput" 
-                        placeholder="Enter search query (or use column filters)..." 
-                        class="search-input"
-                        maxlength="500"
-                    >
-                    <button type="submit" class="search-btn">SEARCH</button>
-                    <button type="button" class="clear-btn" id="clearBtn">CLEAR ALL</button>
+                <div class="help-section">
+                    <h4>2. Attribute Search</h4>
+                    <p>Search specific fields with operators (case sensitive values).</p>
+                    <ul>
+                        <li><code>Platform = IP4</code> - Exact platform match</li>
+                        <li><code>Environment = prod</code> - Exact environment match</li>
+                        <li><code>Status = RUNNING</code> - Only running APIs</li>
+                        <li><code>Version >= 2.0</code> - Version 2.0 or higher</li>
+                    </ul>
+                    <p class="note">💡 Tip: Use exact case for values (IP4 not ip4)</p>
                 </div>
-                
-                <div class="search-options">
-                    <select id="resultsPerPage">
-                        <option value="10">10 per page</option>
-                        <option value="25">25 per page</option>
-                        <option value="50">50 per page</option>
-                        <option value="100" selected>100 per page</option>
-                        <option value="200">200 per page</option>
-                    </select>
+
+                <div class="help-section">
+                    <h4>3. Properties Search</h4>
+                    <p>Search within the Properties object (case sensitive).</p>
+                    <ul>
+                        <li><code>Properties : env = production</code></li>
+                        <li><code>Properties : owner = team-alpha</code></li>
+                        <li><code>Properties : replicas >= 3</code></li>
+                    </ul>
+                    <p class="note">💡 Tip: Property keys and values are case-sensitive</p>
                 </div>
-            </form>
 
-            <!-- Error Container (kept for backward compatibility, toast.js will handle errors) -->
-            <div id="errorContainer" class="error-message" style="display: none;"></div>
-        </div>
+                <div class="help-section">
+                    <h4>4. Logical Operations</h4>
+                    <p>Combine multiple conditions with AND/OR.</p>
+                    <ul>
+                        <li><code>Platform = IP4 AND Environment = prod</code></li>
+                        <li><code>Status = RUNNING OR Status = DEPLOYING</code></li>
+                        <li><code>Version >= 2.0 AND Platform = IP4</code></li>
+                    </ul>
+                </div>
 
-        <!-- Results Section -->
-        <div id="resultsContainer" class="results-section">
-            <div class="results-header">
-                <h3 id="resultCount">
-                    <i class="fas fa-chart-bar"></i> Search Results
-                </h3>
-                <div class="export-buttons">
-                    <button id="exportJsonBtn" class="export-btn">
-                        <i class="fas fa-download"></i> Export JSON
-                    </button>
-                    <button id="exportCsvBtn" class="export-btn">
-                        <i class="fas fa-file-csv"></i> Export CSV
-                    </button>
+                <div class="help-section">
+                    <h4>5. Available Operators</h4>
+                    <ul>
+                        <li><code>=</code> - Exact match</li>
+                        <li><code>!=</code> - Not equal</li>
+                        <li><code>&gt;</code>, <code>&lt;</code>, <code>&gt;=</code>, <code>&lt;=</code> - Comparisons</li>
+                        <li><code>contains</code> - Partial match</li>
+                        <li><code>startswith</code> - Starts with</li>
+                        <li><code>endswith</code> - Ends with</li>
+                    </ul>
+                </div>
+
+                <div class="help-section">
+                    <h4>Quick Tips</h4>
+                    <ul>
+                        <li><strong>Simple text</strong>: Case insensitive, word boundaries</li>
+                        <li><strong>Attributes</strong>: Case sensitive values (IP4 ≠ ip4)</li>
+                        <li><strong>Properties</strong>: Case sensitive keys and values</li>
+                        <li><strong>Column Filters</strong>: Click filter icon (▼) in column headers to filter by specific values</li>
+                        <li>Leave search empty to show all deployments</li>
+                    </ul>
                 </div>
             </div>
-            
-            <!-- Results Table with Excel-style Column Filters -->
-            <div class="table-container">
-                <table class="results-table" id="apiTable">
-                    <thead>
-                        <tr>
-                            <th>
-                                API Name
-                                <span class="filter-icon" id="filterIconApiName" data-column="apiName">
-                                    <i class="fas fa-filter"></i>
-                                </span>
-                                <!-- Dropdown for API Name -->
-                                <div class="filter-dropdown" id="filterDropdownApiName" style="display: none;">
-                                    <div class="filter-dropdown-header">
-                                        <input type="text" class="filter-search" id="filterSearchApiName" placeholder="Search API names..." maxlength="100">
-                                    </div>
-                                    <div class="filter-dropdown-options">
-                                        <label class="filter-option select-all">
-                                            <input type="checkbox" id="selectAllApiName" checked>
-                                            <span>(Select All)</span>
-                                        </label>
-                                        <div id="filterOptionsApiName" class="filter-options-list">
-                                            <!-- Options populated by JavaScript -->
-                                        </div>
-                                    </div>
-                                    <div class="filter-dropdown-footer">
-                                        <button class="filter-apply-btn" onclick="applyColumnFilter('apiName')">Apply</button>
-                                        <button class="filter-cancel-btn" onclick="closeFilterDropdown('apiName')">Cancel</button>
-                                    </div>
-                                </div>
-                            </th>
-                            <th>
-                                Platform
-                                <span class="filter-icon" id="filterIconPlatform" data-column="platform">
-                                    <i class="fas fa-filter"></i>
-                                </span>
-                                <!-- Dropdown for Platform -->
-                                <div class="filter-dropdown" id="filterDropdownPlatform" style="display: none;">
-                                    <div class="filter-dropdown-options no-search">
-                                        <label class="filter-option select-all">
-                                            <input type="checkbox" id="selectAllPlatform" checked>
-                                            <span>(Select All)</span>
-                                        </label>
-                                        <div id="filterOptionsPlatform" class="filter-options-list">
-                                            <!-- Options populated by JavaScript -->
-                                        </div>
-                                    </div>
-                                    <div class="filter-dropdown-footer">
-                                        <button class="filter-apply-btn" onclick="applyColumnFilter('platform')">Apply</button>
-                                        <button class="filter-cancel-btn" onclick="closeFilterDropdown('platform')">Cancel</button>
-                                    </div>
-                                </div>
-                            </th>
-                            <th>
-                                Environment
-                                <span class="filter-icon" id="filterIconEnvironment" data-column="environment">
-                                    <i class="fas fa-filter"></i>
-                                </span>
-                                <!-- Dropdown for Environment -->
-                                <div class="filter-dropdown" id="filterDropdownEnvironment" style="display: none;">
-                                    <div class="filter-dropdown-options no-search">
-                                        <label class="filter-option select-all">
-                                            <input type="checkbox" id="selectAllEnvironment" checked>
-                                            <span>(Select All)</span>
-                                        </label>
-                                        <div id="filterOptionsEnvironment" class="filter-options-list">
-                                            <!-- Options populated by JavaScript -->
-                                        </div>
-                                    </div>
-                                    <div class="filter-dropdown-footer">
-                                        <button class="filter-apply-btn" onclick="applyColumnFilter('environment')">Apply</button>
-                                        <button class="filter-cancel-btn" onclick="closeFilterDropdown('environment')">Cancel</button>
-                                    </div>
-                                </div>
-                            </th>
-                            <th>Version</th>
-                            <th>Deployment Date</th>
-                            <th>Last Updated</th>
-                            <th>Updated By</th>
-                            <th>Status</th>
-                            <th>Properties</th>
-                        </tr>
-                    </thead>
-                    <tbody id="apiTableBody">
-                        <!-- Results will be populated here by JavaScript -->
-                    </tbody>
-                </table>
+        </details>
+
+        <!-- Search Form -->
+        <form id="searchForm">
+            <div class="search-input-group">
+                <input
+                    type="text"
+                    id="searchInput"
+                    placeholder="Enter search query (or use column filters)..."
+                    class="search-input"
+                    maxlength="500"
+                >
+                <button type="submit" class="search-btn">SEARCH</button>
+                <button type="button" class="clear-btn" id="clearBtn">CLEAR ALL</button>
             </div>
-            
-            <!-- Pagination -->
-            <div id="pagination" class="pagination"></div>
-        </div>
+
+            <div class="search-options">
+                <select id="resultsPerPage">
+                    <option value="10">10 per page</option>
+                    <option value="25">25 per page</option>
+                    <option value="50">50 per page</option>
+                    <option value="100" selected>100 per page</option>
+                    <option value="200">200 per page</option>
+                </select>
+            </div>
+        </form>
+
+        <!-- Error Container (kept for backward compatibility, toast.js will handle errors) -->
+        <div id="errorContainer" class="error-message" style="display: none;"></div>
     </div>
 
-    <!-- Properties Modal -->
-    <div id="propertiesModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>API Properties</h2>
-                <span class="modal-close">&times;</span>
-            </div>
-            <div class="modal-body" id="modalBody">
-                <!-- Properties content will be inserted here -->
+    <!-- Results Section -->
+    <div id="resultsContainer" class="results-section">
+        <div class="results-header">
+            <h3 id="resultCount">
+                <i class="fas fa-chart-bar"></i> Search Results
+            </h3>
+            <div class="export-buttons">
+                <button id="exportJsonBtn" class="export-btn">
+                    <i class="fas fa-download"></i> Export JSON
+                </button>
+                <button id="exportCsvBtn" class="export-btn">
+                    <i class="fas fa-file-csv"></i> Export CSV
+                </button>
             </div>
         </div>
+
+        <!-- Results Table with Excel-style Column Filters -->
+        <div class="table-container">
+            <table class="results-table" id="apiTable">
+                <thead>
+                    <tr>
+                        <th>
+                            API Name
+                            <span class="filter-icon" id="filterIconApiName" data-column="apiName">
+                                <i class="fas fa-filter"></i>
+                            </span>
+                            <!-- Dropdown for API Name -->
+                            <div class="filter-dropdown" id="filterDropdownApiName" style="display: none;">
+                                <div class="filter-dropdown-header">
+                                    <input type="text" class="filter-search" id="filterSearchApiName" placeholder="Search API names..." maxlength="100">
+                                </div>
+                                <div class="filter-dropdown-options">
+                                    <label class="filter-option select-all">
+                                        <input type="checkbox" id="selectAllApiName" checked>
+                                        <span>(Select All)</span>
+                                    </label>
+                                    <div id="filterOptionsApiName" class="filter-options-list">
+                                        <!-- Options populated by JavaScript -->
+                                    </div>
+                                </div>
+                                <div class="filter-dropdown-footer">
+                                    <button class="filter-apply-btn" onclick="applyColumnFilter('apiName')">Apply</button>
+                                    <button class="filter-cancel-btn" onclick="closeFilterDropdown('apiName')">Cancel</button>
+                                </div>
+                            </div>
+                        </th>
+                        <th>
+                            Platform
+                            <span class="filter-icon" id="filterIconPlatform" data-column="platform">
+                                <i class="fas fa-filter"></i>
+                            </span>
+                            <!-- Dropdown for Platform -->
+                            <div class="filter-dropdown" id="filterDropdownPlatform" style="display: none;">
+                                <div class="filter-dropdown-options no-search">
+                                    <label class="filter-option select-all">
+                                        <input type="checkbox" id="selectAllPlatform" checked>
+                                        <span>(Select All)</span>
+                                    </label>
+                                    <div id="filterOptionsPlatform" class="filter-options-list">
+                                        <!-- Options populated by JavaScript -->
+                                    </div>
+                                </div>
+                                <div class="filter-dropdown-footer">
+                                    <button class="filter-apply-btn" onclick="applyColumnFilter('platform')">Apply</button>
+                                    <button class="filter-cancel-btn" onclick="closeFilterDropdown('platform')">Cancel</button>
+                                </div>
+                            </div>
+                        </th>
+                        <th>
+                            Environment
+                            <span class="filter-icon" id="filterIconEnvironment" data-column="environment">
+                                <i class="fas fa-filter"></i>
+                            </span>
+                            <!-- Dropdown for Environment -->
+                            <div class="filter-dropdown" id="filterDropdownEnvironment" style="display: none;">
+                                <div class="filter-dropdown-options no-search">
+                                    <label class="filter-option select-all">
+                                        <input type="checkbox" id="selectAllEnvironment" checked>
+                                        <span>(Select All)</span>
+                                    </label>
+                                    <div id="filterOptionsEnvironment" class="filter-options-list">
+                                        <!-- Options populated by JavaScript -->
+                                    </div>
+                                </div>
+                                <div class="filter-dropdown-footer">
+                                    <button class="filter-apply-btn" onclick="applyColumnFilter('environment')">Apply</button>
+                                    <button class="filter-cancel-btn" onclick="closeFilterDropdown('environment')">Cancel</button>
+                                </div>
+                            </div>
+                        </th>
+                        <th>Version</th>
+                        <th>Deployment Date</th>
+                        <th>Last Updated</th>
+                        <th>Updated By</th>
+                        <th>Status</th>
+                        <th>Properties</th>
+                    </tr>
+                </thead>
+                <tbody id="apiTableBody">
+                    <!-- Results will be populated here by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <div id="pagination" class="pagination"></div>
     </div>
 
-    <!-- Scripts -->
-    <!-- Week 3-4 Step 2: Toast Notification System -->
-    <!-- Week 3-4 Step 3: Validation Library (NEW) -->
-    <!-- IMPORTANT: Load in order: toast.js → validation.js → search.js -->
-    <script src="{{ url_for('static', filename='js/toast.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/validation.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/search.js') }}"></script>
-</body>
-</html>
+<!-- Properties Modal -->
+<div id="propertiesModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>API Properties</h2>
+            <span class="modal-close">&times;</span>
+        </div>
+        <div class="modal-body" id="modalBody">
+            <!-- Properties content will be inserted here -->
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block additional_js %}
+<!-- Week 3-4 Step 2: Toast Notification System -->
+<!-- Week 3-4 Step 3: Validation Library (NEW) -->
+<!-- IMPORTANT: Load in order: toast.js → validation.js → search.js -->
+<script src="{{ url_for('static', filename='js/toast.js') }}"></script>
+<script src="{{ url_for('static', filename='js/validation.js') }}"></script>
+<script src="{{ url_for('static', filename='js/search.js') }}"></script>
+{% endblock %}

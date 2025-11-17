@@ -32,9 +32,10 @@ class AuditAction:
     UPDATE_FULL = "UPDATE_FULL"
     UPDATE_PARTIAL = "UPDATE_PARTIAL"
     DELETE = "DELETE"
-    DELETE_ENVIRONMENT = "DELETE_ENVIRONMENT"
-    DELETE_PLATFORM = "DELETE_PLATFORM"
-    DELETE_API = "DELETE_API"
+    DELETE_API_DEPLOYMENT = "DELETE_API_DEPLOYMENT"  # Remove API deployment from platform+environment
+    DELETE_ENVIRONMENT = "DELETE_ENVIRONMENT"  # Actual environment removal (manual/rare)
+    DELETE_PLATFORM = "DELETE_PLATFORM"  # Actual platform removal (manual/rare)
+    DELETE_API = "DELETE_API"  # Complete API removal
 
 
 class AuditService:
@@ -284,30 +285,33 @@ class AuditService:
             changes={'properties': changes}
         )
     
-    def log_deletion(self, api_name: str, platform_id: Optional[str], 
+    def log_deletion(self, api_name: str, platform_id: Optional[str],
                     environment_id: Optional[str], changed_by: str,
                     old_state: Optional[Dict[str, Any]] = None) -> str:
         """
         Log a deletion action.
-        
+
         Args:
             api_name: API name
             platform_id: Platform ID (None if entire API deleted)
             environment_id: Environment ID (None if platform deleted)
             changed_by: User making the change
             old_state: State before deletion
-            
+
         Returns:
             Audit log ID
         """
         # Determine deletion type
-        if environment_id:
-            action = AuditAction.DELETE_ENVIRONMENT
+        if environment_id and platform_id:
+            # Delete API deployment from specific platform+environment
+            action = AuditAction.DELETE_API_DEPLOYMENT
         elif platform_id:
+            # Removing entire platform configuration (rare, manual)
             action = AuditAction.DELETE_PLATFORM
         else:
+            # Removing entire API (complete deletion)
             action = AuditAction.DELETE_API
-        
+
         return self.log_change(
             action=action,
             api_name=api_name,

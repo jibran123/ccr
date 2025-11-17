@@ -11,21 +11,21 @@
     {% block additional_css %}{% endblock %}
 </head>
 <body>
-    <nav class="navbar">
-        <div class="container">
+    <div class="page-wrapper">
+        <nav class="navbar">
             <div class="navbar-brand">
                 <h1>CCR API Manager</h1>
             </div>
             <div class="navbar-menu">
-                <a href="/" class="navbar-item">Search</a>
-                <a href="/health" class="navbar-item">Health</a>
+                <a href="/" class="navbar-item">APIs</a>
+                <a href="/audit" class="navbar-item">Audit</a>
             </div>
-        </div>
-    </nav>
+        </nav>
 
-    <main class="main-content">
-        {% block content %}{% endblock %}
-    </main>
+        <main class="main-content">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
 
     <footer class="footer">
         <div class="container">
