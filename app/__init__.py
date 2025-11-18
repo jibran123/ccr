@@ -5,6 +5,7 @@ Creates and configures the Flask application with all routes and services.
 
 from flask import Flask
 from flask_cors import CORS
+from flask_compress import Compress
 import logging
 import atexit
 
@@ -32,13 +33,19 @@ def create_app(config_class=Config):
     
     # Create Flask app
     app = Flask(__name__)
-    
+
     # Load configuration from Config class into Flask app.config
     app.config.from_object(config_class)
-    
+
     logger.info(f"Starting {app.config.get('APP_NAME')} v{app.config.get('APP_VERSION')}")
     logger.info(f"Authentication enabled: {app.config.get('AUTH_ENABLED')}")
     logger.info(f"Backup enabled: {app.config.get('BACKUP_ENABLED')}")
+
+    # Enable gzip compression for all responses
+    # Compresses responses > 500 bytes (default)
+    # Automatically adds Content-Encoding: gzip header
+    Compress(app)
+    logger.info("✅ Response compression (gzip) enabled")
     
     # Configure CORS with Authorization header support
     CORS(app, resources={

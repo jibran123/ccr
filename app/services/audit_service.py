@@ -18,6 +18,7 @@ from typing import Dict, Any, List, Optional
 from pymongo import DESCENDING, ASCENDING
 from pymongo.errors import PyMongoError
 import uuid
+from app.utils.cache import cached, audit_stats_cache
 
 logger = logging.getLogger(__name__)
 
@@ -498,23 +499,28 @@ class AuditService:
                 'error': str(e)
             }
     
+    @cached(audit_stats_cache, key_prefix="audit_stats")
     def get_stats(self) -> Dict[str, Any]:
         """
         Get audit log statistics.
-        
+
         Returns:
             Dictionary with statistics
+
+        Note:
+            Results are cached for 5 minutes (300 seconds) to improve performance.
+            Cache is automatically invalidated when audit logs are created/modified.
         """
         try:
             total_logs = self.audit_collection.count_documents({})
-            
+
             # Count by action type
             action_pipeline = [
                 {'$group': {'_id': '$action', 'count': {'$sum': 1}}},
                 {'$sort': {'count': -1}}
             ]
             action_counts = list(self.audit_collection.aggregate(action_pipeline))
-            
+
             # Count by user
             user_pipeline = [
                 {'$group': {'_id': '$changed_by', 'count': {'$sum': 1}}},
@@ -522,24 +528,24 @@ class AuditService:
                 {'$limit': 10}
             ]
             top_users = list(self.audit_collection.aggregate(user_pipeline))
-            
+
             # Recent activity (last 24 hours)
             recent_cutoff = (datetime.utcnow() - timedelta(hours=24)).isoformat() + 'Z'
             recent_count = self.audit_collection.count_documents({
                 'timestamp': {'$gte': recent_cutoff}
             })
-            
+
             return {
                 'total_logs': total_logs,
                 'recent_24h': recent_count,
                 'by_action': {item['_id']: item['count'] for item in action_counts},
                 'top_users': [
-                    {'user': item['_id'], 'changes': item['count']} 
+                    {'user': item['_id'], 'changes': item['count']}
                     for item in top_users
                 ],
                 'retention_days': self.retention_days
             }
-            
+
         except Exception as e:
             logger.error(f"Failed to get audit stats: {e}")
             return {'error': str(e)}
