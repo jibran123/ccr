@@ -3,9 +3,12 @@ Flask application factory.
 Creates and configures the Flask application with all routes and services.
 """
 
-from flask import Flask
+from flask import Flask, request
 from flask_cors import CORS
 from flask_compress import Compress
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_talisman import Talisman
 import logging
 import atexit
 
@@ -18,6 +21,14 @@ logger = logging.getLogger(__name__)
 
 # Global scheduler instance
 scheduler = AppScheduler()
+
+# Global rate limiter instance
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=[],
+    storage_uri="memory://",
+    headers_enabled=True
+)
 
 
 def create_app(config_class=Config):
@@ -46,14 +57,67 @@ def create_app(config_class=Config):
     # Automatically adds Content-Encoding: gzip header
     Compress(app)
     logger.info("✅ Response compression (gzip) enabled")
-    
+
+    # Configure rate limiting
+    if app.config.get('RATELIMIT_ENABLED', True):
+        limiter.init_app(app)
+        limiter._storage_uri = app.config.get('RATELIMIT_STORAGE_URI', 'memory://')
+        limiter._default_limits = app.config.get('RATELIMIT_DEFAULT', '100 per hour, 20 per minute')
+        limiter._headers_enabled = app.config.get('RATELIMIT_HEADERS_ENABLED', True)
+        logger.info("✅ Rate limiting enabled")
+        logger.info(f"   Storage: {app.config.get('RATELIMIT_STORAGE_URI', 'memory://')}")
+        logger.info(f"   Default limits: {app.config.get('RATELIMIT_DEFAULT')}")
+    else:
+        logger.warning("⚠️  Rate limiting is DISABLED")
+
+    # Configure security headers
+    if app.config.get('SECURITY_HEADERS_ENABLED', True):
+        # Content Security Policy
+        csp = {
+            'default-src': "'self'",
+            'script-src': ["'self'", "'unsafe-inline'"],  # Allow inline scripts for current implementation
+            'style-src': ["'self'", "'unsafe-inline'"],   # Allow inline styles for current implementation
+            'img-src': ["'self'", "data:", "https:"],
+            'font-src': ["'self'", "data:"],
+            'connect-src': ["'self'"],
+            'frame-ancestors': "'none'",
+            'base-uri': "'self'",
+            'form-action': "'self'"
+        }
+
+        Talisman(
+            app,
+            force_https=app.config.get('FORCE_HTTPS', False),
+            strict_transport_security=app.config.get('HSTS_ENABLED', True),
+            strict_transport_security_max_age=app.config.get('HSTS_MAX_AGE', 31536000),
+            strict_transport_security_include_subdomains=app.config.get('HSTS_INCLUDE_SUBDOMAINS', True),
+            strict_transport_security_preload=app.config.get('HSTS_PRELOAD', False),
+            content_security_policy=csp if app.config.get('CSP_ENABLED', True) else None,
+            # Disable nonce generation - we're using 'unsafe-inline' for compatibility with current templates
+            # content_security_policy_nonce_in=None,
+            referrer_policy='strict-origin-when-cross-origin',
+            feature_policy={
+                'geolocation': "'none'",
+                'microphone': "'none'",
+                'camera': "'none'",
+                'payment': "'none'",
+                'usb': "'none'"
+            }
+        )
+        logger.info("✅ Security headers enabled")
+        logger.info(f"   Force HTTPS: {app.config.get('FORCE_HTTPS', False)}")
+        logger.info(f"   HSTS: {app.config.get('HSTS_ENABLED', True)}")
+        logger.info(f"   CSP: {app.config.get('CSP_ENABLED', True)}")
+    else:
+        logger.warning("⚠️  Security headers are DISABLED")
+
     # Configure CORS with Authorization header support
     CORS(app, resources={
         r"/api/*": {
             "origins": app.config.get('CORS_ORIGINS', '*'),
             "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization", "X-Admin-Key"],
-            "expose_headers": ["Content-Type", "Authorization"],
+            "expose_headers": ["Content-Type", "Authorization", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"],
             "supports_credentials": False
         }
     })

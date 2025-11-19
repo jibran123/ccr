@@ -19,6 +19,7 @@ from app.utils.validators import (
     format_validation_error_response,
     get_validation_example
 )
+from app import limiter
 
 # Import configuration
 from app.config import (
@@ -36,6 +37,7 @@ bp = Blueprint('deploy', __name__, url_prefix='/api')
 
 @bp.route('/deploy', methods=['POST'])
 @require_auth()
+@limiter.limit(lambda: current_app.config.get('RATELIMIT_WRITE_OPS', '20 per minute'))
 def deploy_api():
     """
     Deploy or update an API deployment.

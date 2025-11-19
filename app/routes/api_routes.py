@@ -2,12 +2,14 @@
 from flask import Blueprint, request, jsonify, current_app
 import logging
 from app.utils.auth import require_auth
+from app import limiter
 
 logger = logging.getLogger(__name__)
 
 bp = Blueprint('api', __name__, url_prefix='/api')
 
 @bp.route('/search', methods=['GET', 'POST'])
+@limiter.limit(lambda: current_app.config.get('RATELIMIT_SEARCH', '60 per minute'))
 def search():
     """
     Search APIs endpoint with row-level filtering.
@@ -78,8 +80,9 @@ def search():
         }), 500
 
 @bp.route('/suggestions/<field>', methods=['GET'])
+@require_auth()
 def get_suggestions(field):
-    """Get autocomplete suggestions for a field."""
+    """Get autocomplete suggestions for a field. Requires authentication."""
     try:
         prefix = request.args.get('prefix', '')
         

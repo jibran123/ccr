@@ -517,12 +517,13 @@ def backup_status():
         }), 500
 
 @bp.route('/scheduler/jobs', methods=['GET'])
+@require_auth()
 def get_scheduled_jobs():
     """
     Get list of scheduled jobs.
-    
+
     Returns information about scheduled background jobs (like automated backups).
-    This endpoint is public and does not require authentication.
+    Requires authentication.
     
     **Response (200):**
 ```json

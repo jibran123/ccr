@@ -47,13 +47,14 @@ services:
     networks:
       - ccr_network
     environment:
-      FLASK_ENV: production
+      FLASK_ENV: development
       MONGO_HOST: mongo
       MONGO_PORT: 27017
       MONGO_DB: ccr
       MONGO_COLLECTION: apis
       BACKUP_ENABLED: "true"
       BACKUP_RETENTION_DAYS: 14
+      AUTH_ENABLED: "false"
     volumes:
       - ./logs:/app/logs:Z
       - ./backups:/app/backups:Z  # ← NEW: Backup storage on host

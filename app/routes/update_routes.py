@@ -19,6 +19,7 @@ from app.utils.validators import (
     format_validation_error_response,
     get_validation_example
 )
+from app import limiter
 
 # Import configuration
 from app.config import (
@@ -35,6 +36,7 @@ bp = Blueprint('update', __name__, url_prefix='/api/apis')
 
 @bp.route('/<api_name>/platforms/<platform_id>/environments/<env_id>', methods=['PUT'])
 @require_auth()
+@limiter.limit(lambda: current_app.config.get('RATELIMIT_WRITE_OPS', '20 per minute'))
 def update_deployment_full(api_name, platform_id, env_id):
     """
     Full update (PUT) - Replace entire deployment.
@@ -169,6 +171,7 @@ def update_deployment_full(api_name, platform_id, env_id):
 
 @bp.route('/<api_name>/platforms/<platform_id>/environments/<env_id>', methods=['PATCH'])
 @require_auth()
+@limiter.limit(lambda: current_app.config.get('RATELIMIT_WRITE_OPS', '20 per minute'))
 def update_deployment_partial(api_name, platform_id, env_id):
     """
     Partial update (PATCH) - Update only specified fields.
@@ -294,6 +297,7 @@ def update_deployment_partial(api_name, platform_id, env_id):
 
 @bp.route('/<api_name>/platforms/<platform_id>/environments/<env_id>/status', methods=['PATCH'])
 @require_auth()
+@limiter.limit(lambda: current_app.config.get('RATELIMIT_WRITE_OPS', '20 per minute'))
 def update_deployment_status(api_name, platform_id, env_id):
     """
     Update only deployment status.
@@ -455,6 +459,7 @@ def update_deployment_status(api_name, platform_id, env_id):
 
 @bp.route('/<api_name>/platforms/<platform_id>/environments/<env_id>/properties', methods=['PATCH'])
 @require_auth()
+@limiter.limit(lambda: current_app.config.get('RATELIMIT_WRITE_OPS', '20 per minute'))
 def update_deployment_properties(api_name, platform_id, env_id):
     """
     Update only deployment properties.
@@ -597,9 +602,10 @@ def update_deployment_properties(api_name, platform_id, env_id):
 
 
 @bp.route('/<api_name>/platforms/<platform_id>/environments/<env_id>', methods=['GET'])
+@require_auth()
 def get_deployment_details(api_name, platform_id, env_id):
     """
-    Get deployment details.
+    Get deployment details. Requires authentication.
     
     URL: GET /api/apis/{api_name}/platforms/{platform_id}/environments/{env_id}
     
@@ -669,6 +675,7 @@ def get_deployment_details(api_name, platform_id, env_id):
 
 @bp.route('/<api_name>/platforms/<platform_id>/environments/<env_id>', methods=['DELETE'])
 @require_auth()
+@limiter.limit(lambda: current_app.config.get('RATELIMIT_WRITE_OPS', '20 per minute'))
 def delete_deployment(api_name, platform_id, env_id):
     """
     Delete a deployment.

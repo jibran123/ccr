@@ -1,10 +1,12 @@
 """Health check routes."""
 from flask import Blueprint, jsonify, current_app
 from datetime import datetime
+from app import limiter
 
 bp = Blueprint('health', __name__)
 
 @bp.route('/health', methods=['GET'])
+@limiter.limit(lambda: current_app.config.get('RATELIMIT_HEALTH', '60 per minute'))
 def health_check():
     """Basic health check endpoint."""
     try:

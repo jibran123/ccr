@@ -9,6 +9,7 @@ import logging
 from flask import Blueprint, jsonify, request, current_app
 from datetime import datetime, timedelta
 from app.utils.auth import require_auth, get_current_user
+from app import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,7 @@ def is_admin_user() -> bool:
 
 @bp.route('/logs', methods=['GET'])
 @require_auth()
+@limiter.limit(lambda: current_app.config.get('RATELIMIT_AUDIT_LOGS', '30 per minute'))
 def get_logs():
     """
     Get audit logs with optional filters.
@@ -365,6 +367,7 @@ def get_recent_changes():
 
 @bp.route('/stats', methods=['GET'])
 @require_auth()
+@limiter.limit(lambda: current_app.config.get('RATELIMIT_AUDIT_STATS', '20 per minute'))
 def get_stats():
     """
     Get audit log statistics.
