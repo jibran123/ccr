@@ -242,12 +242,123 @@ def admin_headers():
 def auth_token(client):
     """
     Get a valid JWT authentication token for testing.
-    
+
     Args:
         client: Flask test client
-        
+
     Returns:
         Valid JWT token string
     """
     # If auth is disabled in tests, return empty string
     return ''
+
+
+# ========== Security Testing Fixtures ==========
+
+@pytest.fixture
+def base_url():
+    """
+    Base URL for API testing.
+
+    Returns:
+        Base URL string (default: http://localhost:5000)
+    """
+    return os.getenv('TEST_BASE_URL', 'http://localhost:5000')
+
+
+@pytest.fixture
+def valid_admin_key():
+    """
+    Valid admin key for authentication tests.
+
+    Returns:
+        Admin key string
+    """
+    return 'dev-admin-key-ONLY-FOR-DEVELOPMENT'
+
+
+@pytest.fixture
+def invalid_admin_key():
+    """
+    Invalid admin key for negative testing.
+
+    Returns:
+        Invalid admin key string
+    """
+    return 'wrong-admin-key-invalid'
+
+
+@pytest.fixture
+def security_headers():
+    """
+    Common security headers for testing.
+
+    Returns:
+        Dictionary of security headers
+    """
+    return {
+        'Content-Type': 'application/json',
+        'X-Admin-Key': 'dev-admin-key-ONLY-FOR-DEVELOPMENT'
+    }
+
+
+@pytest.fixture
+def test_user_credentials():
+    """
+    Test user credentials for authentication tests.
+
+    Returns:
+        Dictionary with username and role
+    """
+    return {
+        'username': 'test_user',
+        'role': 'user'
+    }
+
+
+@pytest.fixture
+def test_admin_credentials():
+    """
+    Test admin credentials for authentication tests.
+
+    Returns:
+        Dictionary with username and role
+    """
+    return {
+        'username': 'test_admin',
+        'role': 'admin'
+    }
+
+
+# ========== Command-line Options ==========
+
+def pytest_addoption(parser):
+    """Add custom command-line options to pytest."""
+    parser.addoption(
+        "--skip-slow",
+        action="store_true",
+        default=False,
+        help="Skip slow tests"
+    )
+    parser.addoption(
+        "--run-load-tests",
+        action="store_true",
+        default=False,
+        help="Run load tests (requires Locust)"
+    )
+    parser.addoption(
+        "--base-url",
+        action="store",
+        default="http://localhost:5000",
+        help="Base URL for API testing"
+    )
+
+
+def pytest_configure(config):
+    """Configure pytest with custom settings."""
+    config.addinivalue_line(
+        "markers", "slow: mark test as slow to run"
+    )
+    config.addinivalue_line(
+        "markers", "load: mark test as load/stress test"
+    )

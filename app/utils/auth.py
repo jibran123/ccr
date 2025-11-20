@@ -67,10 +67,8 @@ def generate_token(username: str, role: str = 'user',
         # Generate token
         token = jwt.encode(payload, secret_key, algorithm=algorithm)
         
-        logger.info(
-            f"Generated token for user '{username}' with role '{role}', "
-            f"expires at {expiration.isoformat()}"
-        )
+        # Reduced logging for security - don't log username/expiration
+        logger.info(f"Generated token for user with role '{role}'")
         
         return {
             'token': token,
@@ -87,20 +85,20 @@ def generate_token(username: str, role: str = 'user',
 def validate_token(token: str) -> Dict[str, Any]:
     """
     Validate a JWT token and extract payload.
-    
+
     Args:
         token: JWT token string
-        
+
     Returns:
         Dictionary with token payload (username, role, etc.)
-        
+
     Raises:
-        AuthError: If token is invalid, expired, or malformed
+        AuthError: If token is invalid, expired, malformed, or blacklisted
     """
     try:
         secret_key = current_app.config.get('JWT_SECRET_KEY')
         algorithm = current_app.config.get('JWT_ALGORITHM', 'HS256')
-        
+
         # Decode and validate token
         payload = jwt.decode(
             token,
@@ -112,14 +110,33 @@ def validate_token(token: str) -> Dict[str, Any]:
                 'require': ['username', 'role', 'exp']
             }
         )
-        
-        logger.info(
-            f"Token validated for user '{payload.get('username')}' "
-            f"with role '{payload.get('role')}'"
-        )
-        
+
+        # Check if access token is blacklisted (only for access tokens with JTI)
+        jti = payload.get('jti')
+        if jti:
+            # Access token - check blacklist
+            try:
+                from app.services.token_service import TokenService
+                if hasattr(current_app, 'db_service'):
+                    token_service = TokenService(current_app.db_service)
+                    if token_service.is_token_blacklisted(jti):
+                        logger.warning(f"Token validation failed: Token has been revoked (JTI: {jti[:10]}...)")
+                        raise AuthError("Token has been revoked", 401)
+            except AuthError:
+                # Re-raise AuthError (token is blacklisted)
+                raise
+            except Exception as e:
+                # If blacklist check fails (DB error, etc.), log but don't block (fail open for availability)
+                logger.error(f"Error checking token blacklist: {str(e)}")
+
+        # Reduced logging for security
+        logger.debug("Token validated successfully")
+
         return payload
-        
+
+    except AuthError:
+        # Re-raise AuthError as-is
+        raise
     except jwt.ExpiredSignatureError:
         logger.warning("Token validation failed: Token has expired")
         raise AuthError("Token has expired", 401)
@@ -240,9 +257,7 @@ def require_auth(roles: Optional[list] = None):
                     'error_code': 'AUTH_REQUIRED'
                 }), 401
             
-            logger.warning(f"✅ Token found: {token[:20]}...")
-            
-            # Validate token
+            # Validate token (removed token prefix logging for security)
             try:
                 payload = validate_token(token)
                 
@@ -267,11 +282,8 @@ def require_auth(roles: Optional[list] = None):
                     'role': payload.get('role')
                 }
                 
-                logger.warning(
-                    f"✅ Authenticated request to {request.path} by user '{payload.get('username')}' "
-                    f"with role '{payload.get('role')}'"
-                )
-                logger.warning("=" * 70)
+                # Reduced logging for security
+                logger.debug(f"Authenticated request to {request.path}")
                 
                 # Call the protected function
                 return f(*args, **kwargs)
