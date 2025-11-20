@@ -15,12 +15,13 @@ class TestDeployEndpoint:
     def test_deploy_new_api_minimal(self, client):
         """Test deploying new API with minimal required fields."""
         deploy_data = {
-            'api_name': f'test-deploy-{datetime.now().timestamp()}',
+            'api_name': f'test-deploy-{int(datetime.now().timestamp())}',  # ✅ FIXED: Use int() to avoid periods
             'platform_id': 'IP4',  # ✅ FIXED: Changed from 'platform'
             'environment_id': 'tst',  # ✅ FIXED: Changed from 'environment'
             'version': '1.0.0',
             'status': 'RUNNING',
-            'updated_by': 'pytest'
+            'updated_by': 'pytest',
+            'properties': {}  # ✅ FIXED: Properties field is mandatory (can be empty)
         }
         
         response = client.post('/api/deploy',
@@ -37,7 +38,7 @@ class TestDeployEndpoint:
     def test_deploy_with_properties(self, client):
         """Test deploying API with properties."""
         deploy_data = {
-            'api_name': f'test-props-{datetime.now().timestamp()}',
+            'api_name': f'test-props-{int(datetime.now().timestamp())}',  # ✅ FIXED: Use int() to avoid periods
             'platform_id': 'IP4',  # ✅ FIXED: Changed from 'platform'
             'environment_id': 'tst',  # ✅ FIXED: Changed from 'environment'
             'version': '1.0.0',
@@ -61,8 +62,8 @@ class TestDeployEndpoint:
     
     def test_deploy_update_existing(self, client):
         """Test updating existing deployment (upsert behavior)."""
-        api_name = f'test-upsert-{datetime.now().timestamp()}'
-        
+        api_name = f'test-upsert-{int(datetime.now().timestamp())}'  # ✅ FIXED: Use int() to avoid periods
+
         # First deployment
         deploy_data_v1 = {
             'api_name': api_name,
@@ -70,12 +71,13 @@ class TestDeployEndpoint:
             'environment_id': 'tst',  # ✅ FIXED: Changed from 'environment'
             'version': '1.0.0',
             'status': 'RUNNING',
-            'updated_by': 'pytest'
+            'updated_by': 'pytest',
+            'properties': {}  # ✅ FIXED: Properties field is mandatory (can be empty)
         }
-        
+
         response1 = client.post('/api/deploy', json=deploy_data_v1)
         assert response1.status_code == 201
-        
+
         # Update with new version
         deploy_data_v2 = {
             'api_name': api_name,
@@ -83,7 +85,8 @@ class TestDeployEndpoint:
             'environment_id': 'tst',  # ✅ FIXED: Changed from 'environment'
             'version': '2.0.0',  # Changed
             'status': 'RUNNING',
-            'updated_by': 'pytest'
+            'updated_by': 'pytest',
+            'properties': {}  # ✅ FIXED: Properties field is mandatory (can be empty)
         }
         
         response2 = client.post('/api/deploy', json=deploy_data_v2)
@@ -100,15 +103,20 @@ class TestDeployEndpoint:
             # Missing 'environment_id'
             'version': '1.0.0',
             'status': 'RUNNING',
-            'updated_by': 'pytest'
+            'updated_by': 'pytest',
+            'properties': {}  # ✅ FIXED: Properties field is mandatory (can be empty)
         }
         
         response = client.post('/api/deploy', json=deploy_data)
-        
+
         assert response.status_code == 400
         data = json.loads(response.data)
         assert data['status'] == 'error'
-        assert 'environment' in data['message'].lower()
+        # API returns nested error structure: {'error': {'message': '...', 'details': {...}}}
+        if 'error' in data:
+            assert 'environment' in data['error']['message'].lower() or 'environment_id' in str(data['error'].get('details', {})).lower()
+        else:
+            assert 'environment' in data.get('message', '').lower()
     
     def test_deploy_invalid_platform(self, client):
         """Test deploy with invalid platform."""
@@ -146,8 +154,8 @@ class TestDeployEndpoint:
     
     def test_deploy_multiple_platforms(self, client):
         """Test deploying same API to different platforms."""
-        api_name = f'test-multi-platform-{datetime.now().timestamp()}'
-        
+        api_name = f'test-multi-platform-{int(datetime.now().timestamp())}'  # ✅ FIXED: Use int() to avoid periods
+
         # Deploy to IP4
         deploy_ip4 = {
             'api_name': api_name,
@@ -155,12 +163,13 @@ class TestDeployEndpoint:
             'environment_id': 'tst',  # ✅ FIXED: Changed from 'environment'
             'version': '1.0.0',
             'status': 'RUNNING',
-            'updated_by': 'pytest'
+            'updated_by': 'pytest',
+            'properties': {}  # ✅ FIXED: Properties field is mandatory (can be empty)
         }
-        
+
         response1 = client.post('/api/deploy', json=deploy_ip4)
         assert response1.status_code == 201
-        
+
         # Deploy same API to IP3
         deploy_ip3 = {
             'api_name': api_name,
@@ -168,7 +177,8 @@ class TestDeployEndpoint:
             'environment_id': 'tst',  # ✅ FIXED: Changed from 'environment'
             'version': '1.0.0',
             'status': 'RUNNING',
-            'updated_by': 'pytest'
+            'updated_by': 'pytest',
+            'properties': {}  # ✅ FIXED: Properties field is mandatory (can be empty)
         }
         
         response2 = client.post('/api/deploy', json=deploy_ip3)

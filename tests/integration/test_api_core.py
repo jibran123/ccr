@@ -101,13 +101,19 @@ class TestCoreEndpoints:
     def test_stats_endpoint(self, client):
         """Test statistics endpoint."""
         response = client.get('/api/stats')
-        
+
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data['status'] == 'success'
         assert 'data' in data
-        assert 'total_documents' in data['data']
-        assert isinstance(data['data']['total_documents'], int)
+        # API returns 'total_apis' and 'total_deployments' instead of 'total_documents'
+        assert 'total_apis' in data['data']
+        assert 'total_deployments' in data['data']
+        assert isinstance(data['data']['total_apis'], int)
+        assert isinstance(data['data']['total_deployments'], int)
+        # Verify non-negative values
+        assert data['data']['total_apis'] >= 0
+        assert data['data']['total_deployments'] >= 0
     
     def test_export_endpoint_json(self, client):
         """Test export endpoint with JSON format."""

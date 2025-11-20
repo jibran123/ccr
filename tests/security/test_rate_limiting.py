@@ -176,10 +176,7 @@ class TestRateLimitRecovery:
         assert response2.status_code == 200, "Request after delay should succeed"
 
 
-@pytest.mark.skipif(
-    pytest.config.getoption("--skip-slow", default=False),
-    reason="Slow test - skipped by default"
-)
+@pytest.mark.slow  # Use --skip-slow to skip this test class
 class TestRateLimitStress:
     """Stress tests for rate limiting (optional, slow)."""
 
