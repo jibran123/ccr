@@ -44,6 +44,13 @@ class TestConfig(Config):
     # Test secrets
     SECRET_KEY = 'test-secret-key-for-testing-only'
     JWT_SECRET_KEY = 'test-jwt-secret-key-for-testing-only'
+    JWT_ADMIN_KEY = 'dev-admin-key-ONLY-FOR-DEVELOPMENT'
+
+    # Disable rate limiting for tests
+    RATELIMIT_ENABLED = False
+
+    # Disable brute force lockout for tests (or set high limits)
+    AUTH_LOCKOUT_ENABLED = False
 
 
 @pytest.fixture
@@ -228,13 +235,13 @@ def sample_backup_data():
 def admin_headers():
     """
     Headers for admin API requests.
-    
+
     Returns:
         Dictionary with admin headers
     """
     return {
         'Content-Type': 'application/json',
-        'X-Admin-Key': 'dev-admin-key-CHANGE-IN-PRODUCTION'
+        'X-Admin-Key': 'dev-admin-key-ONLY-FOR-DEVELOPMENT'
     }
 
 
@@ -362,3 +369,31 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "load: mark test as load/stress test"
     )
+
+
+@pytest.fixture(autouse=True, scope='function')
+def cleanup_auth_state(app):
+    """
+    Clean up authentication state between tests.
+
+    Clears rate limiters and auth lockouts to prevent test pollution.
+    """
+    yield
+
+    # Clean up after each test
+    try:
+        # Clear rate limiter storage if it exists
+        if hasattr(app, 'limiter') and hasattr(app.limiter, 'storage'):
+            app.limiter.reset()
+    except Exception:
+        pass  # Ignore errors in cleanup
+
+    try:
+        # Clear auth lockouts from database
+        if hasattr(app, 'db_service') and app.db_service:
+            db = app.db_service.db
+            if db is not None:
+                db['auth_lockouts'].delete_many({})
+                db['token_blacklist'].delete_many({})
+    except Exception:
+        pass  # Ignore errors in cleanup
