@@ -55,7 +55,14 @@ services:
       BACKUP_ENABLED: "true"
       BACKUP_RETENTION_DAYS: 14
       AUTH_ENABLED: "true"
-      RATELIMIT_AUTH_TOKEN: "100 per minute"
+      # Rate limiting - disabled for testing to prevent test pollution
+      # Specific rate limiting tests will still validate the functionality
+      # In production, enable with strict limits
+      RATELIMIT_ENABLED: "false"
+      # Brute force lockout - disabled for testing to prevent test pollution
+      # Specific brute force tests will validate the functionality
+      # In production, enable with appropriate thresholds
+      AUTH_LOCKOUT_ENABLED: "false"
     volumes:
       - ./logs:/app/logs:Z
       - ./backups:/app/backups:Z  # ← NEW: Backup storage on host

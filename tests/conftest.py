@@ -260,6 +260,80 @@ def auth_token(client):
     return ''
 
 
+@pytest.fixture
+def live_auth_tokens(base_url, admin_headers):
+    """
+    Generate authentication tokens from the live server for integration tests.
+
+    This fixture generates both user and admin tokens by calling the live server's
+    /api/auth/token endpoint. Use this for integration tests that need real tokens.
+
+    Args:
+        base_url: Base URL of the live server
+        admin_headers: Admin headers fixture with X-Admin-Key
+
+    Returns:
+        Dictionary with 'user' and 'admin' token objects
+    """
+    import requests
+
+    # Generate user token
+    user_response = requests.post(
+        f"{base_url}/api/auth/token",
+        headers=admin_headers,
+        json={"username": "test_integration_user", "role": "user"}
+    )
+
+    # Generate admin token
+    admin_response = requests.post(
+        f"{base_url}/api/auth/token",
+        headers=admin_headers,
+        json={"username": "test_integration_admin", "role": "admin"}
+    )
+
+    if user_response.status_code != 200 or admin_response.status_code != 200:
+        pytest.fail(f"Failed to generate auth tokens. User: {user_response.status_code}, Admin: {admin_response.status_code}")
+
+    return {
+        'user': user_response.json()['data'],
+        'admin': admin_response.json()['data']
+    }
+
+
+@pytest.fixture
+def user_auth_headers(live_auth_tokens):
+    """
+    Get authorization headers with a valid user token.
+
+    Args:
+        live_auth_tokens: Fixture that generates tokens from live server
+
+    Returns:
+        Dictionary with Authorization header containing user token
+    """
+    return {
+        'Authorization': f"Bearer {live_auth_tokens['user']['access_token']}",
+        'Content-Type': 'application/json'
+    }
+
+
+@pytest.fixture
+def admin_auth_headers(live_auth_tokens):
+    """
+    Get authorization headers with a valid admin token.
+
+    Args:
+        live_auth_tokens: Fixture that generates tokens from live server
+
+    Returns:
+        Dictionary with Authorization header containing admin token
+    """
+    return {
+        'Authorization': f"Bearer {live_auth_tokens['admin']['access_token']}",
+        'Content-Type': 'application/json'
+    }
+
+
 # ========== Security Testing Fixtures ==========
 
 @pytest.fixture

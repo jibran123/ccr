@@ -17,13 +17,13 @@ class TestCachePerformance:
         """Setup for each test."""
         self.base_url = base_url
 
-    def test_audit_stats_cache_hit(self, base_url):
+    def test_audit_stats_cache_hit(self, base_url, admin_auth_headers):
         """Test that audit stats endpoint benefits from caching."""
         endpoint = f"{base_url}/api/audit/stats"
 
         # First request - cache MISS (will hit database)
         start1 = time.time()
-        response1 = requests.get(endpoint)
+        response1 = requests.get(endpoint, headers=admin_auth_headers)
         time1 = (time.time() - start1) * 1000
 
         assert response1.status_code == 200, "First request should succeed"
@@ -33,7 +33,7 @@ class TestCachePerformance:
 
         # Second request - cache HIT (should be faster)
         start2 = time.time()
-        response2 = requests.get(endpoint)
+        response2 = requests.get(endpoint, headers=admin_auth_headers)
         time2 = (time.time() - start2) * 1000
 
         assert response2.status_code == 200, "Second request should succeed"
@@ -54,14 +54,14 @@ class TestCachePerformance:
         else:
             print("  Note: Cache improvement less than expected")
 
-    def test_cache_consistency(self, base_url):
+    def test_cache_consistency(self, base_url, admin_auth_headers):
         """Test that cached responses are consistent."""
         endpoint = f"{base_url}/api/audit/stats"
 
         # Make multiple requests
         responses = []
         for i in range(3):
-            response = requests.get(endpoint)
+            response = requests.get(endpoint, headers=admin_auth_headers)
             assert response.status_code == 200
             responses.append(response.json())
             time.sleep(0.2)
@@ -74,12 +74,12 @@ class TestCachePerformance:
 
         print("✓ Cached responses are consistent")
 
-    def test_cache_ttl_expiration(self, base_url):
+    def test_cache_ttl_expiration(self, base_url, admin_auth_headers):
         """Test that cache expires after TTL."""
         endpoint = f"{base_url}/api/audit/stats"
 
         # First request
-        response1 = requests.get(endpoint)
+        response1 = requests.get(endpoint, headers=admin_auth_headers)
         assert response1.status_code == 200
 
         data1 = response1.json()

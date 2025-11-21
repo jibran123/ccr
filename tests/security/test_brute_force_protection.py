@@ -56,7 +56,8 @@ class TestBruteForceProtection:
                 json={"username": f"fail_track_user_{i}", "role": "user"}
             )
 
-            if response.status_code == 401:
+            # API returns 403 for invalid admin key
+            if response.status_code in [401, 403]:
                 failed_count += 1
 
             time.sleep(0.5)
