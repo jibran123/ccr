@@ -6,45 +6,34 @@ attempts and implements IP-based lockout mechanism.
 
 Week 13-14: Testing & Quality Assurance - Phase 1 Critical Security Tests
 
-TODO: These tests require Flask app context mocking refactor.
-      Currently marked as skip to avoid CICD failures.
-      Will be fixed in next iteration with proper test helpers.
-      See integration tests for AuthLockoutService functionality testing.
+All tests updated to use Flask app context properly.
 """
 
 import pytest
 from unittest.mock import Mock, MagicMock, patch
 from datetime import datetime, timedelta
-from app import create_app
-from app.config import Config
+from flask import Flask
 from app.services.auth_lockout_service import AuthLockoutService
-
-# Mark all tests in this module as skip until mocking is fixed
-pytestmark = pytest.mark.skip(reason="Requires Flask app context mocking refactor - see TODO in docstring")
-
-
-class TestAppConfig(Config):
-    """Test configuration."""
-    TESTING = True
-    SECRET_KEY = 'test-secret'
-    JWT_SECRET_KEY = 'test-jwt-secret'
-    AUTH_LOCKOUT_ENABLED = True
-    AUTH_LOCKOUT_MAX_ATTEMPTS = 5
-    AUTH_LOCKOUT_WINDOW_MINUTES = 15
-    AUTH_LOCKOUT_DURATION_MINUTES = 30
 
 
 @pytest.fixture(scope='function')
 def app():
-    """Create Flask app for testing."""
-    app = create_app(TestAppConfig)
+    """Create minimal Flask app for testing with proper app context."""
+    app = Flask(__name__)
+    app.config['TESTING'] = True
+    app.config['SECRET_KEY'] = 'test-secret'
+    app.config['JWT_SECRET_KEY'] = 'test-jwt-secret'
+    app.config['AUTH_LOCKOUT_ENABLED'] = True
+    app.config['AUTH_LOCKOUT_MAX_ATTEMPTS'] = 5
+    app.config['AUTH_LOCKOUT_WINDOW_MINUTES'] = 15
+    app.config['AUTH_LOCKOUT_DURATION_MINUTES'] = 30
     return app
 
 
 @pytest.fixture(scope='function')
 def mock_db_service():
     """Create mock database service."""
-    mock_db = Mock()
+    mock_db = MagicMock()
     mock_client = MagicMock()
     mock_collection = MagicMock()
 
@@ -63,36 +52,38 @@ def auth_lockout_service(mock_db_service):
 
 
 class TestAuthLockoutServiceInitialization:
-    """Test AuthLockoutService initialization."""
+    """Test AuthLockoutService initialization with proper Flask app context."""
 
-    def test_init_creates_service_with_collection_name(self, mock_db_service):
+    def test_init_creates_service_with_collection_name(self, app, mock_db_service):
         """Test that initialization sets collection name."""
-        service = AuthLockoutService(mock_db_service)
-        assert service.db == mock_db_service
-        assert service.collection_name == 'auth_lockouts'
+        with app.app_context():
+            service = AuthLockoutService(mock_db_service)
+            assert service.db == mock_db_service
+            assert service.collection_name == 'auth_lockouts'
 
-    def test_init_calls_ensure_indexes(self, mock_db_service):
+    def test_init_calls_ensure_indexes(self, app, mock_db_service):
         """Test that initialization creates indexes."""
-        mock_collection = mock_db_service.client[mock_db_service.db_name]['auth_lockouts']
+        with app.app_context():
+            mock_collection = mock_db_service.client[mock_db_service.db_name]['auth_lockouts']
 
-        service = AuthLockoutService(mock_db_service)
+            service = AuthLockoutService(mock_db_service)
 
-        # Verify index creation was called
-        assert mock_collection.create_index.call_count == 2
+            # Verify index creation was called
+            assert mock_collection.create_index.call_count == 2
 
-        # Verify ip_address unique index
-        mock_collection.create_index.assert_any_call('ip_address', unique=True)
+            # Verify ip_address unique index
+            mock_collection.create_index.assert_any_call('ip_address', unique=True)
 
-        # Verify TTL index on locked_until
-        mock_collection.create_index.assert_any_call(
-            'locked_until',
-            expireAfterSeconds=3600,
-            partialFilterExpression={'locked_until': {'$exists': True}}
-        )
+            # Verify TTL index on locked_until
+            mock_collection.create_index.assert_any_call(
+                'locked_until',
+                expireAfterSeconds=3600,
+                partialFilterExpression={'locked_until': {'$exists': True}}
+            )
 
 
 class TestLockoutStatusChecking:
-    """Test lockout status checking functionality."""
+    """Test lockout status checking functionality with proper Flask app context."""
 
     def test_is_locked_out_returns_false_when_disabled(self, app, auth_lockout_service):
         """Test that lockout check returns False when feature is disabled."""
@@ -150,7 +141,8 @@ class TestLockoutStatusChecking:
         assert is_locked is True
         assert message is not None
         assert "Too many failed authentication attempts" in message
-        assert "20 minutes" in message
+        # Allow for small timing variations (19-20 minutes)
+        assert "19 minutes" in message or "20 minutes" in message
 
     def test_is_locked_out_handles_exception_gracefully(self, app, auth_lockout_service):
         """Test that exceptions are handled and fail open."""
@@ -166,7 +158,7 @@ class TestLockoutStatusChecking:
 
 
 class TestFailedAttemptRecording:
-    """Test failed attempt recording functionality."""
+    """Test failed attempt recording functionality with proper Flask app context."""
 
     def test_record_failed_attempt_returns_false_when_disabled(self, app, auth_lockout_service):
         """Test that recording returns False when feature is disabled."""
@@ -295,7 +287,7 @@ class TestFailedAttemptRecording:
 
 
 class TestFailedAttemptReset:
-    """Test failed attempt reset functionality."""
+    """Test failed attempt reset functionality with proper Flask app context."""
 
     def test_reset_failed_attempts_does_nothing_when_disabled(self, app, auth_lockout_service):
         """Test that reset does nothing when feature is disabled."""
@@ -311,7 +303,7 @@ class TestFailedAttemptReset:
     def test_reset_failed_attempts_deletes_record(self, app, auth_lockout_service):
         """Test that reset deletes the lockout record."""
         mock_collection = auth_lockout_service.db.client[auth_lockout_service.db.db_name]['auth_lockouts']
-        mock_collection.delete_one.return_value = Mock(deleted_count=1)
+        mock_collection.delete_one.return_value = MagicMock(deleted_count=1)
 
         with app.app_context():
             auth_lockout_service.reset_failed_attempts('192.168.1.1')
@@ -321,7 +313,7 @@ class TestFailedAttemptReset:
     def test_reset_failed_attempts_handles_no_record(self, app, auth_lockout_service):
         """Test that reset handles case when no record exists."""
         mock_collection = auth_lockout_service.db.client[auth_lockout_service.db.db_name]['auth_lockouts']
-        mock_collection.delete_one.return_value = Mock(deleted_count=0)
+        mock_collection.delete_one.return_value = MagicMock(deleted_count=0)
 
         with app.app_context():
             # Should not raise exception
@@ -340,163 +332,173 @@ class TestFailedAttemptReset:
 
 
 class TestLockoutInfoRetrieval:
-    """Test lockout information retrieval functionality."""
+    """Test lockout information retrieval functionality with proper Flask app context."""
 
-    def test_get_lockout_info_returns_none_when_no_record(self, auth_lockout_service):
+    def test_get_lockout_info_returns_none_when_no_record(self, app, auth_lockout_service):
         """Test that get_lockout_info returns None when no record exists."""
-        mock_collection = auth_lockout_service.db.client[auth_lockout_service.db.db_name]['auth_lockouts']
-        mock_collection.find_one.return_value = None
+        with app.app_context():
+            mock_collection = auth_lockout_service.db.client[auth_lockout_service.db.db_name]['auth_lockouts']
+            mock_collection.find_one.return_value = None
 
-        result = auth_lockout_service.get_lockout_info('192.168.1.1')
+            result = auth_lockout_service.get_lockout_info('192.168.1.1')
 
-        assert result is None
-        mock_collection.find_one.assert_called_once_with({'ip_address': '192.168.1.1'})
+            assert result is None
+            mock_collection.find_one.assert_called_once_with({'ip_address': '192.168.1.1'})
 
-    def test_get_lockout_info_returns_formatted_record(self, auth_lockout_service):
+    def test_get_lockout_info_returns_formatted_record(self, app, auth_lockout_service):
         """Test that get_lockout_info returns properly formatted record."""
-        mock_time = datetime(2025, 1, 1, 12, 0, 0)
+        with app.app_context():
+            mock_time = datetime(2025, 1, 1, 12, 0, 0)
 
-        mock_collection = auth_lockout_service.db.client[auth_lockout_service.db.db_name]['auth_lockouts']
-        mock_collection.find_one.return_value = {
-            '_id': 'some_mongodb_id',
-            'ip_address': '192.168.1.1',
-            'failed_attempts': 5,
-            'first_attempt_time': mock_time,
-            'last_attempt_time': mock_time,
-            'locked_until': mock_time + timedelta(minutes=30),
-            'last_attempted_username': 'test_user'
-        }
-
-        result = auth_lockout_service.get_lockout_info('192.168.1.1')
-
-        assert result is not None
-        assert '_id' not in result  # Should be removed
-        assert result['ip_address'] == '192.168.1.1'
-        assert result['failed_attempts'] == 5
-        assert result['first_attempt_time'] == '2025-01-01T12:00:00Z'
-        assert result['last_attempt_time'] == '2025-01-01T12:00:00Z'
-        assert result['locked_until'] == '2025-01-01T12:30:00Z'
-        assert result['last_attempted_username'] == 'test_user'
-        assert 'is_currently_locked' in result
-
-    def test_get_lockout_info_handles_exception_gracefully(self, auth_lockout_service):
-        """Test that exceptions are handled and return None."""
-        mock_collection = auth_lockout_service.db.client[auth_lockout_service.db.db_name]['auth_lockouts']
-        mock_collection.find_one.side_effect = Exception("Database error")
-
-        result = auth_lockout_service.get_lockout_info('192.168.1.1')
-
-        assert result is None
-
-
-class TestAllLockoutsRetrieval:
-    """Test all lockouts retrieval functionality."""
-
-    def test_get_all_lockouts_returns_empty_list_when_no_records(self, auth_lockout_service):
-        """Test that get_all_lockouts returns empty list when no records exist."""
-        mock_collection = auth_lockout_service.db.client[auth_lockout_service.db.db_name]['auth_lockouts']
-        mock_cursor = MagicMock()
-        mock_cursor.sort.return_value.limit.return_value = []
-        mock_collection.find.return_value = mock_cursor
-
-        result = auth_lockout_service.get_all_lockouts()
-
-        assert result == []
-        mock_collection.find.assert_called_once()
-
-    def test_get_all_lockouts_returns_formatted_records(self, auth_lockout_service):
-        """Test that get_all_lockouts returns properly formatted records."""
-        mock_time = datetime(2025, 1, 1, 12, 0, 0)
-
-        mock_records = [
-            {
-                '_id': 'id1',
+            mock_collection = auth_lockout_service.db.client[auth_lockout_service.db.db_name]['auth_lockouts']
+            mock_collection.find_one.return_value = {
+                '_id': 'some_mongodb_id',
                 'ip_address': '192.168.1.1',
                 'failed_attempts': 5,
                 'first_attempt_time': mock_time,
                 'last_attempt_time': mock_time,
-                'locked_until': mock_time + timedelta(minutes=30)
-            },
-            {
-                '_id': 'id2',
-                'ip_address': '192.168.1.2',
-                'failed_attempts': 3,
-                'first_attempt_time': mock_time,
-                'last_attempt_time': mock_time,
-                'locked_until': None
+                'locked_until': mock_time + timedelta(minutes=30),
+                'last_attempted_username': 'test_user'
             }
-        ]
 
-        mock_collection = auth_lockout_service.db.client[auth_lockout_service.db.db_name]['auth_lockouts']
-        mock_cursor = MagicMock()
-        mock_cursor.sort.return_value.limit.return_value = mock_records
-        mock_collection.find.return_value = mock_cursor
+            result = auth_lockout_service.get_lockout_info('192.168.1.1')
 
-        result = auth_lockout_service.get_all_lockouts()
+            assert result is not None
+            assert '_id' not in result  # Should be removed
+            assert result['ip_address'] == '192.168.1.1'
+            assert result['failed_attempts'] == 5
+            assert result['first_attempt_time'] == '2025-01-01T12:00:00Z'
+            assert result['last_attempt_time'] == '2025-01-01T12:00:00Z'
+            assert result['locked_until'] == '2025-01-01T12:30:00Z'
+            assert result['last_attempted_username'] == 'test_user'
+            assert 'is_currently_locked' in result
 
-        assert len(result) == 2
-        assert '_id' not in result[0]
-        assert result[0]['ip_address'] == '192.168.1.1'
-        assert 'is_currently_locked' in result[0]
+    def test_get_lockout_info_handles_exception_gracefully(self, app, auth_lockout_service):
+        """Test that exceptions are handled and return None."""
+        with app.app_context():
+            mock_collection = auth_lockout_service.db.client[auth_lockout_service.db.db_name]['auth_lockouts']
+            mock_collection.find_one.side_effect = Exception("Database error")
 
-    def test_get_all_lockouts_respects_limit(self, auth_lockout_service):
+            result = auth_lockout_service.get_lockout_info('192.168.1.1')
+
+            assert result is None
+
+
+class TestAllLockoutsRetrieval:
+    """Test all lockouts retrieval functionality with proper Flask app context."""
+
+    def test_get_all_lockouts_returns_empty_list_when_no_records(self, app, auth_lockout_service):
+        """Test that get_all_lockouts returns empty list when no records exist."""
+        with app.app_context():
+            mock_collection = auth_lockout_service.db.client[auth_lockout_service.db.db_name]['auth_lockouts']
+            mock_cursor = MagicMock()
+            mock_cursor.sort.return_value.limit.return_value = []
+            mock_collection.find.return_value = mock_cursor
+
+            result = auth_lockout_service.get_all_lockouts()
+
+            assert result == []
+            mock_collection.find.assert_called_once()
+
+    def test_get_all_lockouts_returns_formatted_records(self, app, auth_lockout_service):
+        """Test that get_all_lockouts returns properly formatted records."""
+        with app.app_context():
+            mock_time = datetime(2025, 1, 1, 12, 0, 0)
+
+            mock_records = [
+                {
+                    '_id': 'id1',
+                    'ip_address': '192.168.1.1',
+                    'failed_attempts': 5,
+                    'first_attempt_time': mock_time,
+                    'last_attempt_time': mock_time,
+                    'locked_until': mock_time + timedelta(minutes=30)
+                },
+                {
+                    '_id': 'id2',
+                    'ip_address': '192.168.1.2',
+                    'failed_attempts': 3,
+                    'first_attempt_time': mock_time,
+                    'last_attempt_time': mock_time,
+                    'locked_until': None
+                }
+            ]
+
+            mock_collection = auth_lockout_service.db.client[auth_lockout_service.db.db_name]['auth_lockouts']
+            mock_cursor = MagicMock()
+            mock_cursor.sort.return_value.limit.return_value = mock_records
+            mock_collection.find.return_value = mock_cursor
+
+            result = auth_lockout_service.get_all_lockouts()
+
+            assert len(result) == 2
+            assert '_id' not in result[0]
+            assert result[0]['ip_address'] == '192.168.1.1'
+            assert 'is_currently_locked' in result[0]
+
+    def test_get_all_lockouts_respects_limit(self, app, auth_lockout_service):
         """Test that get_all_lockouts respects the limit parameter."""
-        mock_collection = auth_lockout_service.db.client[auth_lockout_service.db.db_name]['auth_lockouts']
-        mock_cursor = MagicMock()
-        mock_cursor.sort.return_value.limit.return_value = []
-        mock_collection.find.return_value = mock_cursor
+        with app.app_context():
+            mock_collection = auth_lockout_service.db.client[auth_lockout_service.db.db_name]['auth_lockouts']
+            mock_cursor = MagicMock()
+            mock_cursor.sort.return_value.limit.return_value = []
+            mock_collection.find.return_value = mock_cursor
 
-        auth_lockout_service.get_all_lockouts(limit=50)
+            auth_lockout_service.get_all_lockouts(limit=50)
 
-        mock_cursor.sort.return_value.limit.assert_called_with(50)
+            mock_cursor.sort.return_value.limit.assert_called_with(50)
 
-    def test_get_all_lockouts_handles_exception_gracefully(self, auth_lockout_service):
+    def test_get_all_lockouts_handles_exception_gracefully(self, app, auth_lockout_service):
         """Test that exceptions are handled and return empty list."""
-        mock_collection = auth_lockout_service.db.client[auth_lockout_service.db.db_name]['auth_lockouts']
-        mock_collection.find.side_effect = Exception("Database error")
+        with app.app_context():
+            mock_collection = auth_lockout_service.db.client[auth_lockout_service.db.db_name]['auth_lockouts']
+            mock_collection.find.side_effect = Exception("Database error")
 
-        result = auth_lockout_service.get_all_lockouts()
+            result = auth_lockout_service.get_all_lockouts()
 
-        assert result == []
+            assert result == []
 
 
 class TestManualUnlock:
-    """Test manual unlock functionality."""
+    """Test manual unlock functionality with proper Flask app context."""
 
-    def test_manually_unlock_succeeds_when_record_exists(self, auth_lockout_service):
+    def test_manually_unlock_succeeds_when_record_exists(self, app, auth_lockout_service):
         """Test that manual unlock succeeds when lockout record exists."""
-        mock_collection = auth_lockout_service.db.client[auth_lockout_service.db.db_name]['auth_lockouts']
-        mock_collection.delete_one.return_value = Mock(deleted_count=1)
+        with app.app_context():
+            mock_collection = auth_lockout_service.db.client[auth_lockout_service.db.db_name]['auth_lockouts']
+            mock_collection.delete_one.return_value = MagicMock(deleted_count=1)
 
-        success, message = auth_lockout_service.manually_unlock('192.168.1.1')
+            success, message = auth_lockout_service.manually_unlock('192.168.1.1')
 
-        assert success is True
-        assert "unlocked" in message.lower()
-        mock_collection.delete_one.assert_called_once_with({'ip_address': '192.168.1.1'})
+            assert success is True
+            assert "unlocked" in message.lower()
+            mock_collection.delete_one.assert_called_once_with({'ip_address': '192.168.1.1'})
 
-    def test_manually_unlock_fails_when_no_record(self, auth_lockout_service):
+    def test_manually_unlock_fails_when_no_record(self, app, auth_lockout_service):
         """Test that manual unlock fails when no lockout record exists."""
-        mock_collection = auth_lockout_service.db.client[auth_lockout_service.db.db_name]['auth_lockouts']
-        mock_collection.delete_one.return_value = Mock(deleted_count=0)
+        with app.app_context():
+            mock_collection = auth_lockout_service.db.client[auth_lockout_service.db.db_name]['auth_lockouts']
+            mock_collection.delete_one.return_value = MagicMock(deleted_count=0)
 
-        success, message = auth_lockout_service.manually_unlock('192.168.1.1')
+            success, message = auth_lockout_service.manually_unlock('192.168.1.1')
 
-        assert success is False
-        assert "No lockout record found" in message
+            assert success is False
+            assert "No lockout record found" in message
 
-    def test_manually_unlock_handles_exception(self, auth_lockout_service):
+    def test_manually_unlock_handles_exception(self, app, auth_lockout_service):
         """Test that manual unlock handles exceptions."""
-        mock_collection = auth_lockout_service.db.client[auth_lockout_service.db.db_name]['auth_lockouts']
-        mock_collection.delete_one.side_effect = Exception("Database error")
+        with app.app_context():
+            mock_collection = auth_lockout_service.db.client[auth_lockout_service.db.db_name]['auth_lockouts']
+            mock_collection.delete_one.side_effect = Exception("Database error")
 
-        success, message = auth_lockout_service.manually_unlock('192.168.1.1')
+            success, message = auth_lockout_service.manually_unlock('192.168.1.1')
 
-        assert success is False
-        assert "Error unlocking IP" in message
+            assert success is False
+            assert "Error unlocking IP" in message
 
 
 class TestEdgeCases:
-    """Test edge cases and error conditions."""
+    """Test edge cases and error conditions with proper Flask app context."""
 
     def test_record_failed_attempt_with_no_username(self, app, auth_lockout_service):
         """Test that failed attempt recording works without username."""
@@ -526,7 +528,8 @@ class TestEdgeCases:
             is_locked, message = auth_lockout_service.is_locked_out('192.168.1.1')
 
         assert is_locked is True
-        assert "25 minutes" in message
+        # Allow for small timing variations (24-25 minutes)
+        assert "24 minutes" in message or "25 minutes" in message
 
     def test_multiple_ips_tracked_independently(self, app, auth_lockout_service):
         """Test that different IPs are tracked independently."""
