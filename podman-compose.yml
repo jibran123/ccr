@@ -54,7 +54,8 @@ services:
       MONGO_COLLECTION: apis
       BACKUP_ENABLED: "true"
       BACKUP_RETENTION_DAYS: 14
-      AUTH_ENABLED: "false"
+      AUTH_ENABLED: "true"
+      RATELIMIT_AUTH_TOKEN: "100 per minute"
     volumes:
       - ./logs:/app/logs:Z
       - ./backups:/app/backups:Z  # ← NEW: Backup storage on host
