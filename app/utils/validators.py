@@ -141,15 +141,16 @@ def validate_update_request(data: Dict[str, Any], is_patch: bool = False) -> Tup
             'updated_by': 'Updated By',
             'properties': 'Properties'
         }
-        
+
         for field, display_name in required_fields.items():
             if field not in data or data[field] is None:
                 if field == 'properties':
                     errors[field] = f"{display_name} is mandatory (can be empty object {{}})"
-                elif field == 'version' and (data[field] == '' or str(data[field]).strip() == ''):
-                    errors[field] = f"{display_name} is required for full update (PUT)"
                 else:
                     errors[field] = f"{display_name} is required for full update (PUT)"
+            elif field == 'version' and (data[field] == '' or str(data[field]).strip() == ''):
+                # Check for empty version string only if field exists
+                errors[field] = f"{display_name} is required for full update (PUT)"
     
     # For PATCH, at least one field must be provided
     if is_patch:
@@ -365,18 +366,22 @@ def validate_attribute_search_syntax(query: str) -> bool:
     # Basic check - if it has operators, it should have field names
     operators = ['=', '!=', '>', '<', '>=', '<=', 'contains', 'startswith', 'endswith']
     has_operator = any(op in query for op in operators)
-    
+
     if has_operator:
         # Should have at least one word before operator
         parts = re.split(r'[=!<>]|contains|startswith|endswith', query, flags=re.IGNORECASE)
         if len(parts) < 2:
             return False
-        
+
         # First part should have a field name
-        first_part = parts[0].strip().split()[-1]  # Get last word before operator
+        first_part_words = parts[0].strip().split()
+        if not first_part_words:  # No field name before operator (e.g., "= value")
+            return False
+
+        first_part = first_part_words[-1]  # Get last word before operator
         if len(first_part) < 2:
             return False
-    
+
     return True
 
 

@@ -231,12 +231,8 @@ class TestAttributeSearchSyntaxValidation:
         for query in valid_queries:
             assert validate_attribute_search_syntax(query) is True
 
-    @pytest.mark.skip(reason="Edge case causes IndexError in validator - bug to be fixed separately")
     def test_invalid_attribute_searches(self):
         """Test invalid attribute search syntax."""
-        # Note: These edge cases cause IndexError in the validator
-        # The validator needs improvement, but for now we'll test what works
-        # "=" alone causes IndexError, so we skip it
         invalid_queries = [
             "= value",  # No field name before operator
         ]
@@ -402,7 +398,6 @@ class TestUpdateRequestValidation:
             assert is_valid is True
             assert error is None
 
-    @pytest.mark.skip(reason="Validator has KeyError bug when checking missing fields - bug to be fixed separately")
     def test_full_update_missing_required_fields(self):
         """Test PUT request with missing required fields."""
         from unittest.mock import patch
