@@ -246,11 +246,36 @@ class TestHTTPSRedirection:
         else:
             print("Base URL is HTTPS")
 
-    @pytest.mark.skip(reason="Production-only test - requires HTTPS setup")
+    @pytest.mark.skip(reason="Production-only test - requires HTTPS setup in production/staging")
+    @pytest.mark.production
     def test_https_redirection_in_production(self):
-        """Test that HTTP redirects to HTTPS in production.
+        """
+        Test HTTPS redirection in production environment.
 
-        This test should be run manually in production environment.
+        MANUAL VERIFICATION PROCEDURE:
+        ================================
+        Prerequisites:
+        - Production/Staging environment with HTTPS configured
+        - Valid SSL/TLS certificates installed
+        - FORCE_HTTPS=true in environment variables
+
+        Test Steps:
+        1. Access application via HTTP: http://your-domain.com/health
+        2. Verify 301 Moved Permanently redirect
+        3. Verify Location header: https://your-domain.com/health
+        4. Verify HSTS header present: Strict-Transport-Security
+        5. Follow redirect and verify HTTPS works
+
+        Expected Results:
+        - HTTP request returns 301 status
+        - Redirects to HTTPS equivalent URL
+        - HSTS header includes max-age=31536000
+        - No certificate warnings
+        - All assets load securely (no mixed content)
+
+        This test is automatically skipped in development environments
+        where HTTPS is not configured. It should be run manually as part
+        of production deployment verification (Week 15-16: Kubernetes Migration).
         """
         pass
 

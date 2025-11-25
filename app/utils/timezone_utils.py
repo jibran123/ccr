@@ -1,7 +1,10 @@
 """Timezone utility functions for CET/CEST conversion."""
 import pytz
+import logging
 from datetime import datetime
 from typing import Union, Optional
+
+logger = logging.getLogger(__name__)
 
 # Define the timezone for Netherlands/Belgium (handles CET/CEST automatically)
 # CET = Central European Time (UTC+1) - Winter
@@ -39,9 +42,9 @@ def utc_to_local(utc_time: Union[datetime, str, None]) -> Optional[datetime]:
         local_dt = utc_dt.astimezone(LOCAL_TIMEZONE)
         
         return local_dt
-        
+
     except Exception as e:
-        print(f"Error converting UTC to local time: {e}")
+        logger.error(f"Error converting UTC to local time: {e}")
         return None
 
 def local_to_utc(local_time: Union[datetime, str, None]) -> Optional[datetime]:
