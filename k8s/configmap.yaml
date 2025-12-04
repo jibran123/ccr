@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flask-config
+  labels:
+    app: ccr
+data:
+  # Flask Configuration
+  FLASK_ENV: "production"
+
+  # MongoDB Configuration
+  MONGO_HOST: "mongodb-service"
+  MONGO_PORT: "27017"
+  MONGO_DB: "ccr"
+  MONGO_COLLECTION: "apis"
+
+  # Backup Configuration
+  BACKUP_ENABLED: "true"
+  BACKUP_RETENTION_DAYS: "14"
+
+  # Authentication Configuration
+  # Set to "true" for production, "false" for development/testing
+  AUTH_ENABLED: "false"
+
+  # Rate Limiting Configuration
+  # Set to "true" for production to protect against abuse
+  RATELIMIT_ENABLED: "true"
+
+  # Brute Force Protection Configuration
+  # Set to "true" for production to prevent brute force attacks
+  AUTH_LOCKOUT_ENABLED: "true"

@@ -1,4 +1,4 @@
-// Complete search.js with Excel-style Column Filters + Frontend Validation
+// Complete search.js with Excel-style Column Filters + Frontend Validation + Sortable Columns
 let currentPage = 1;
 let currentPerPage = 100;
 let currentSearchQuery = '';
@@ -19,15 +19,36 @@ let availableValues = {
     environment: []
 };
 
+// Sort state
+let currentSort = {
+    column: null,
+    direction: null  // null, 'asc', 'desc'
+};
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Initializing CCR API Manager with validation...');
+    console.log('Initializing Common Configuration Repository (CCR) with validation...');
     initializeApp();
 });
 
 function initializeApp() {
+    // Setup offline/online detection
+    if (window.setupOfflineDetection) {
+        window.setupOfflineDetection();
+    }
+
+    // Check for search parameter in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const searchParam = urlParams.get('search');
+    if (searchParam) {
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+            searchInput.value = decodeURIComponent(searchParam);
+            currentSearchQuery = searchInput.value.trim();
+        }
+    }
+
     setupEventListeners();
-    createPropertiesModal();
     loadAPIs();  // Load initial data
 }
 
@@ -80,7 +101,12 @@ function setupEventListeners() {
     if (exportCsvBtn) {
         exportCsvBtn.addEventListener('click', () => exportResults('csv'));
     }
-    
+
+    // ==========================
+    // SEARCH HELP MODAL
+    // ==========================
+    setupSearchHelpModal();
+
     // ==========================
     // FILTER ICON CLICKS
     // ==========================
@@ -109,7 +135,19 @@ function setupEventListeners() {
             }
         });
     }
-    
+
+    // ==========================
+    // SORTABLE COLUMN CLICKS
+    // ==========================
+
+    const sortableHeaders = document.querySelectorAll('.sortable');
+    sortableHeaders.forEach(header => {
+        header.addEventListener('click', function() {
+            const column = this.dataset.column;
+            sortByColumn(column);
+        });
+    });
+
     // Click outside to close dropdowns
     document.addEventListener('click', function(e) {
         const dropdowns = document.querySelectorAll('.filter-dropdown');
@@ -197,27 +235,48 @@ function validateBeforeSearch() {
 
 function toggleFilterDropdown(columnName) {
     const dropdown = document.getElementById(`filterDropdown${capitalize(columnName)}`);
-    
+    const tableContainer = document.querySelector('.table-container');
+
     // Close all other dropdowns
     document.querySelectorAll('.filter-dropdown').forEach(d => {
         if (d.id !== dropdown.id) {
             d.style.display = 'none';
         }
     });
-    
+
     // Toggle this dropdown
     if (dropdown.style.display === 'none' || dropdown.style.display === '') {
         populateFilterDropdown(columnName);
         dropdown.style.display = 'block';
+
+        // Expand table container when dropdown opens (Excel behavior)
+        if (tableContainer) {
+            tableContainer.style.maxHeight = 'none';
+            tableContainer.style.overflow = 'visible';
+        }
     } else {
         dropdown.style.display = 'none';
+
+        // Restore table container size when dropdown closes
+        if (tableContainer) {
+            tableContainer.style.maxHeight = '600px';
+            tableContainer.style.overflow = 'auto';
+        }
     }
 }
 
 function closeFilterDropdown(columnName) {
     const dropdown = document.getElementById(`filterDropdown${capitalize(columnName)}`);
+    const tableContainer = document.querySelector('.table-container');
+
     if (dropdown) {
         dropdown.style.display = 'none';
+    }
+
+    // Restore table container size
+    if (tableContainer) {
+        tableContainer.style.maxHeight = '600px';
+        tableContainer.style.overflow = 'auto';
     }
 }
 
@@ -398,29 +457,145 @@ function applyFilters() {
 
 function clearAllFiltersAndSearch() {
     console.log('Clearing ALL filters and search');
-    
+
     // Clear search input
     const searchInput = document.getElementById('searchInput');
     searchInput.value = '';
     searchInput.style.borderColor = '';
     searchInput.style.backgroundColor = '';
     currentSearchQuery = '';
-    
+
     // Clear all column filters
     columnFilters = {
         apiName: [],
         platform: [],
         environment: []
     };
-    
+
     // Update all filter icons to inactive
     ['apiName', 'platform', 'environment'].forEach(col => {
         updateFilterIcon(col);
     });
-    
+
+    // Clear sort state
+    currentSort = {
+        column: null,
+        direction: null
+    };
+    updateSortIcons();
+
     // Reload data
     currentPage = 1;
     loadAPIs();
+}
+
+// ==========================
+// SORTABLE COLUMN FUNCTIONS
+// ==========================
+
+function sortByColumn(column) {
+    console.log('Sorting by:', column);
+
+    // Determine new sort direction: null → asc → desc → null
+    if (currentSort.column === column) {
+        if (currentSort.direction === null) {
+            currentSort.direction = 'asc';
+        } else if (currentSort.direction === 'asc') {
+            currentSort.direction = 'desc';
+        } else {
+            currentSort.direction = null;
+            currentSort.column = null;
+        }
+    } else {
+        currentSort.column = column;
+        currentSort.direction = 'asc';
+    }
+
+    // Update header icons
+    updateSortIcons();
+
+    // Sort the filtered results
+    if (currentSort.direction === null) {
+        // Reset to original order
+        applyFilters();
+    } else {
+        sortFilteredResults();
+        displayAPIs(filteredResults);
+    }
+}
+
+function sortFilteredResults() {
+    if (!currentSort.column || !currentSort.direction) {
+        return;
+    }
+
+    const column = currentSort.column;
+    const direction = currentSort.direction;
+
+    filteredResults.sort((a, b) => {
+        let aVal, bVal;
+
+        // Map column names to data keys
+        switch(column) {
+            case 'version':
+                aVal = a.Version || a.version || '';
+                bVal = b.Version || b.version || '';
+                break;
+            case 'deploymentDate':
+                aVal = a.DeploymentDate || a.deploymentDate || '';
+                bVal = b.DeploymentDate || b.deploymentDate || '';
+                // Convert to Date for proper comparison
+                aVal = aVal ? new Date(aVal).getTime() : 0;
+                bVal = bVal ? new Date(bVal).getTime() : 0;
+                break;
+            case 'lastUpdated':
+                aVal = a.LastUpdated || a.lastUpdated || '';
+                bVal = b.LastUpdated || b.lastUpdated || '';
+                // Convert to Date for proper comparison
+                aVal = aVal ? new Date(aVal).getTime() : 0;
+                bVal = bVal ? new Date(bVal).getTime() : 0;
+                break;
+            case 'updatedBy':
+                aVal = a.UpdatedBy || a.updatedBy || '';
+                bVal = b.UpdatedBy || b.updatedBy || '';
+                break;
+            case 'status':
+                aVal = a.Status || a.status || '';
+                bVal = b.Status || b.status || '';
+                break;
+            default:
+                return 0;
+        }
+
+        // Handle string comparison (case insensitive)
+        if (typeof aVal === 'string' && typeof bVal === 'string') {
+            aVal = aVal.toLowerCase();
+            bVal = bVal.toLowerCase();
+        }
+
+        // Compare
+        let comparison = 0;
+        if (aVal < bVal) comparison = -1;
+        if (aVal > bVal) comparison = 1;
+
+        // Apply direction
+        return direction === 'asc' ? comparison : -comparison;
+    });
+}
+
+function updateSortIcons() {
+    // Remove all sort classes
+    document.querySelectorAll('.sortable').forEach(header => {
+        header.classList.remove('sort-asc', 'sort-desc');
+    });
+
+    // Add class to current sorted column
+    if (currentSort.column && currentSort.direction) {
+        const header = document.querySelector(`.sortable[data-column="${currentSort.column}"]`);
+        if (header) {
+            header.classList.add(`sort-${currentSort.direction}`);
+        }
+    }
 }
 
 // ==========================
@@ -465,47 +640,57 @@ async function loadAPIs() {
             page: currentPage,
             page_size: currentPerPage
         });
-        
+
         console.log('Loading APIs with params:', params.toString());
-        
+
         const response = await fetch(`/api/search?${params}`);
-        
+
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            // Parse error response
+            const errorData = await response.json().catch(() => ({}));
+            const error = new Error(errorData.error?.message || `HTTP ${response.status}`);
+            error.status = response.status;
+            error.error = errorData.error;
+            throw error;
         }
-        
+
         const data = await response.json();
-        
+
         if (data.status === 'error') {
-            throw new Error(data.error?.message || data.message || 'Search failed');
+            const error = new Error(data.error?.message || data.message || 'Search failed');
+            error.error = data.error;
+            throw error;
         }
-        
+
         // Store all results for filtering
         allResults = data.data || [];
         filteredResults = allResults;
-        
+
         console.log(`Loaded ${allResults.length} APIs`);
-        
+
         // Extract filter values from results
         extractFilterValues();
-        
+
         // Display results
         displayAPIs(filteredResults);
         updateResultsCount(filteredResults.length);
         updatePagination(data.pagination || {});
-        
+
     } catch (error) {
         console.error('Error loading APIs:', error);
-        
-        // Show error via toast if available
-        if (window.showToast) {
+
+        // Use enhanced error handling with retry
+        if (window.showApiError) {
+            window.showApiError(error, 'Search', () => loadAPIs());
+        } else if (window.showToast) {
+            // Fallback if showApiError not available
             window.showToast(
                 `Failed to load APIs: ${error.message}`,
                 'error',
                 { duration: 8000 }
             );
         }
-        
+
         // Display error in table
         displayError(`Error loading APIs: ${error.message}`);
     }
@@ -555,6 +740,19 @@ function displayAPIs(apis) {
             window.ValidationLib.escapeHtml : 
             escapeHtml;
         
+        // Prepare row data for drawer
+        const rowData = {
+            apiName: apiName,
+            platform: platform,
+            environment: environment,
+            version: version,
+            status: status,
+            lastUpdated: lastUpdated,
+            deploymentDate: deployDate,
+            updatedBy: updatedBy,
+            properties: properties
+        };
+
         tr.innerHTML = `
             <td class="api-name">${escape(apiName)}</td>
             <td>${escape(platform)}</td>
@@ -565,12 +763,23 @@ function displayAPIs(apis) {
             <td>${escape(updatedBy)}</td>
             <td><span class="status-badge ${getStatusClass(status)}">${escape(status)}</span></td>
             <td>
-                <button onclick='viewProperties(${JSON.stringify(properties)}, "${escape(apiName)}")' class="btn-view">
+                <button class="btn-view" title="View details">
                     <i class="fas fa-eye"></i> View
                 </button>
             </td>
         `;
-        
+
+        // Add click handler to View button
+        const viewBtn = tr.querySelector('.btn-view');
+        if (viewBtn) {
+            viewBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                if (window.openApiDetails) {
+                    window.openApiDetails(rowData);
+                }
+            });
+        }
+
         tbody.appendChild(tr);
     });
 }
@@ -624,69 +833,10 @@ function displayError(message) {
 }
 
 // ==========================
-// PROPERTIES MODAL
+// PROPERTIES MODAL - REMOVED (Replaced by API Details Drawer)
 // ==========================
-
-function createPropertiesModal() {
-    const modal = document.getElementById('propertiesModal');
-    if (!modal) return;
-    
-    // Close modal when clicking X
-    const closeBtn = modal.querySelector('.modal-close');
-    if (closeBtn) {
-        closeBtn.onclick = function() {
-            modal.style.display = 'none';
-        };
-    }
-    
-    // Close modal when clicking outside
-    window.onclick = function(event) {
-        if (event.target === modal) {
-            modal.style.display = 'none';
-        }
-    };
-}
-
-function viewProperties(properties, apiName) {
-    const modal = document.getElementById('propertiesModal');
-    const modalBody = document.getElementById('modalBody');
-    
-    if (!modal || !modalBody) return;
-    
-    // Use validation library's escapeHtml if available
-    const escape = window.ValidationLib ? 
-        window.ValidationLib.escapeHtml : 
-        escapeHtml;
-    
-    // Build properties table
-    let html = `<h3>Properties for: ${escape(apiName)}</h3>`;
-    
-    if (!properties || Object.keys(properties).length === 0) {
-        html += '<p>No properties defined.</p>';
-    } else {
-        html += '<table class="properties-table">';
-        html += '<thead><tr><th>Key</th><th>Value</th></tr></thead>';
-        html += '<tbody>';
-        
-        for (const [key, value] of Object.entries(properties)) {
-            const displayValue = typeof value === 'object' ? 
-                JSON.stringify(value, null, 2) : 
-                String(value);
-            
-            html += `
-                <tr>
-                    <td><strong>${escape(key)}</strong></td>
-                    <td><pre>${escape(displayValue)}</pre></td>
-                </tr>
-            `;
-        }
-        
-        html += '</tbody></table>';
-    }
-    
-    modalBody.innerHTML = html;
-    modal.style.display = 'block';
-}
+// The old properties modal has been replaced by a comprehensive API details drawer
+// See api-details.js for the new implementation
 
 // ==========================
 // EXPORT FUNCTIONS
@@ -824,7 +974,7 @@ function formatDate(dateStr) {
 
 function escapeHtml(text) {
     if (text === null || text === undefined) return '';
-    
+
     const map = {
         '&': '&amp;',
         '<': '&lt;',
@@ -832,8 +982,88 @@ function escapeHtml(text) {
         '"': '&quot;',
         "'": '&#039;'
     };
-    
+
     return String(text).replace(/[&<>"']/g, m => map[m]);
 }
 
-console.log('✅ Search.js loaded with validation support');
+// ==========================
+// SEARCH HELP MODAL
+// ==========================
+
+function setupSearchHelpModal() {
+    const modal = document.getElementById('searchHelpModal');
+    const helpBtn = document.getElementById('searchHelpBtn');
+
+    if (!modal || !helpBtn) {
+        console.warn('Search help modal or button not found');
+        return;
+    }
+
+    const closeBtn = modal.querySelector('.modal-close');
+
+    // Open modal
+    helpBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        modal.style.display = 'block';
+    });
+
+    // Close modal
+    if (closeBtn) {
+        closeBtn.addEventListener('click', function() {
+            modal.style.display = 'none';
+        });
+    }
+
+    // Click outside to close
+    window.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            modal.style.display = 'none';
+        }
+    });
+
+    // ESC key to close
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && modal.style.display === 'block') {
+            modal.style.display = 'none';
+        }
+    });
+
+    // Tab switching
+    const tabBtns = modal.querySelectorAll('.tab-btn');
+    const tabContents = modal.querySelectorAll('.tab-content');
+
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const tabName = this.dataset.tab;
+
+            // Remove active class from all
+            tabBtns.forEach(b => b.classList.remove('active'));
+            tabContents.forEach(c => c.classList.remove('active'));
+
+            // Add active class to clicked tab
+            this.classList.add('active');
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+        });
+    });
+
+    // Example box click to populate search
+    const exampleBoxes = modal.querySelectorAll('.example-box');
+    exampleBoxes.forEach(box => {
+        box.addEventListener('click', function() {
+            const query = this.dataset.query;
+            const searchInput = document.getElementById('searchInput');
+            searchInput.value = query;
+            searchInput.focus();
+            modal.style.display = 'none';
+
+            // Show toast
+            if (window.showToast) {
+                window.showToast('Search query populated! Click SEARCH to execute.', 'info', { duration: 3000 });
+            }
+        });
+    });
+
+    console.log('✅ Search help modal initialized');
+}
+
+console.log('✅ Search.js loaded with validation support + sortable columns');

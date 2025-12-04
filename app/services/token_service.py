@@ -101,7 +101,7 @@ class TokenService:
                 'jti': jti,
                 'iat': datetime.utcnow(),
                 'exp': expiration,
-                'iss': 'ccr-api-manager'
+                'iss': 'ccr'
             }
 
             # Generate token
@@ -155,7 +155,7 @@ class TokenService:
                 'token_id': token_id,
                 'iat': datetime.utcnow(),
                 'exp': expiration,
-                'iss': 'ccr-api-manager'
+                'iss': 'ccr'
             }
 
             # Generate token

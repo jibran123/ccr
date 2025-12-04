@@ -1,5 +1,5 @@
 """
-Caching utilities for CCR API Manager
+Caching utilities for Common Configuration Repository (CCR)
 Week 9-10: Performance optimization through intelligent caching
 """
 

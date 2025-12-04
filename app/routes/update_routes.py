@@ -157,13 +157,54 @@ def update_deployment_full(api_name, platform_id, env_id):
                 }
             }), status_code
             
+    except KeyError as e:
+        # Missing required field in request
+        logger.warning(f"Update missing field: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': {
+                'type': 'ValidationError',
+                'message': f'Missing required field: {str(e)}',
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            },
+            'help': {
+                'example': get_validation_example('update_full'),
+                'required_fields': ['version', 'status', 'updated_by', 'properties']
+            }
+        }), 400
+    except ValueError as e:
+        # Invalid data type or value
+        logger.warning(f"Update value error: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': {
+                'type': 'ValidationError',
+                'message': f'Invalid value: {str(e)}',
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            }
+        }), 400
     except Exception as e:
         logger.error(f"❌ Update error: {str(e)}", exc_info=True)
+
+        # Check for database connection errors
+        error_msg = str(e).lower()
+        if 'connection' in error_msg or 'timeout' in error_msg:
+            return jsonify({
+                'status': 'error',
+                'error': {
+                    'type': 'DatabaseConnectionError',
+                    'message': 'Unable to connect to database. Please try again in a moment.',
+                    'error_code': 'DB_CONNECTION_FAILED',
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                }
+            }), 503
+
         return jsonify({
             'status': 'error',
             'error': {
                 'type': 'InternalError',
-                'message': f'Update failed: {str(e)}',
+                'message': 'Update failed due to an unexpected error. Please try again.',
+                'error_code': 'UPDATE_FAILED',
                 'timestamp': datetime.utcnow().isoformat() + 'Z'
             }
         }), 500
@@ -283,13 +324,39 @@ def update_deployment_partial(api_name, platform_id, env_id):
                 }
             }), status_code
             
+    except ValueError as e:
+        # Invalid data type or value
+        logger.warning(f"Partial update value error: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': {
+                'type': 'ValidationError',
+                'message': f'Invalid value: {str(e)}',
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            }
+        }), 400
     except Exception as e:
         logger.error(f"❌ Partial update error: {str(e)}", exc_info=True)
+
+        # Check for database connection errors
+        error_msg = str(e).lower()
+        if 'connection' in error_msg or 'timeout' in error_msg:
+            return jsonify({
+                'status': 'error',
+                'error': {
+                    'type': 'DatabaseConnectionError',
+                    'message': 'Unable to connect to database. Please try again in a moment.',
+                    'error_code': 'DB_CONNECTION_FAILED',
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                }
+            }), 503
+
         return jsonify({
             'status': 'error',
             'error': {
                 'type': 'InternalError',
-                'message': f'Update failed: {str(e)}',
+                'message': 'Update failed due to an unexpected error. Please try again.',
+                'error_code': 'PARTIAL_UPDATE_FAILED',
                 'timestamp': datetime.utcnow().isoformat() + 'Z'
             }
         }), 500
@@ -445,13 +512,40 @@ def update_deployment_status(api_name, platform_id, env_id):
                 }
             }), status_code
             
+    except ValueError as e:
+        # Invalid status value
+        logger.warning(f"Status update value error: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': {
+                'type': 'ValidationError',
+                'message': f'Invalid status value: {str(e)}',
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            },
+            'help': 'Valid statuses: RUNNING, STOPPED, DEPLOYING, FAILED, MAINTENANCE'
+        }), 400
     except Exception as e:
         logger.error(f"❌ Status update error: {str(e)}", exc_info=True)
+
+        # Check for database connection errors
+        error_msg = str(e).lower()
+        if 'connection' in error_msg or 'timeout' in error_msg:
+            return jsonify({
+                'status': 'error',
+                'error': {
+                    'type': 'DatabaseConnectionError',
+                    'message': 'Unable to connect to database. Please try again in a moment.',
+                    'error_code': 'DB_CONNECTION_FAILED',
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                }
+            }), 503
+
         return jsonify({
             'status': 'error',
             'error': {
                 'type': 'InternalError',
-                'message': f'Status update failed: {str(e)}',
+                'message': 'Status update failed due to an unexpected error. Please try again.',
+                'error_code': 'STATUS_UPDATE_FAILED',
                 'timestamp': datetime.utcnow().isoformat() + 'Z'
             }
         }), 500
@@ -589,13 +683,41 @@ def update_deployment_properties(api_name, platform_id, env_id):
                 }
             }), status_code
             
+    except TypeError as e:
+        # Invalid properties data type (not a dict)
+        logger.warning(f"Properties update type error: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': {
+                'type': 'ValidationError',
+                'message': 'Properties must be a valid JSON object (dictionary)',
+                'details': str(e),
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            },
+            'help': 'Example: {"properties": {"owner": "team-name", "cost_center": "CC-1234"}}'
+        }), 400
     except Exception as e:
         logger.error(f"❌ Properties update error: {str(e)}", exc_info=True)
+
+        # Check for database connection errors
+        error_msg = str(e).lower()
+        if 'connection' in error_msg or 'timeout' in error_msg:
+            return jsonify({
+                'status': 'error',
+                'error': {
+                    'type': 'DatabaseConnectionError',
+                    'message': 'Unable to connect to database. Please try again in a moment.',
+                    'error_code': 'DB_CONNECTION_FAILED',
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                }
+            }), 503
+
         return jsonify({
             'status': 'error',
             'error': {
                 'type': 'InternalError',
-                'message': f'Properties update failed: {str(e)}',
+                'message': 'Properties update failed due to an unexpected error. Please try again.',
+                'error_code': 'PROPERTIES_UPDATE_FAILED',
                 'timestamp': datetime.utcnow().isoformat() + 'Z'
             }
         }), 500
@@ -663,11 +785,26 @@ def get_deployment_details(api_name, platform_id, env_id):
             
     except Exception as e:
         logger.error(f"❌ Get deployment error: {str(e)}", exc_info=True)
+
+        # Check for database connection errors
+        error_msg = str(e).lower()
+        if 'connection' in error_msg or 'timeout' in error_msg:
+            return jsonify({
+                'status': 'error',
+                'error': {
+                    'type': 'DatabaseConnectionError',
+                    'message': 'Unable to connect to database. Please try again in a moment.',
+                    'error_code': 'DB_CONNECTION_FAILED',
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                }
+            }), 503
+
         return jsonify({
             'status': 'error',
             'error': {
                 'type': 'InternalError',
-                'message': str(e),
+                'message': 'Unable to retrieve deployment details. Please try again.',
+                'error_code': 'GET_DEPLOYMENT_FAILED',
                 'timestamp': datetime.utcnow().isoformat() + 'Z'
             }
         }), 500
@@ -792,11 +929,27 @@ def delete_deployment(api_name, platform_id, env_id):
             
     except Exception as e:
         logger.error(f"❌ Delete error: {str(e)}", exc_info=True)
+
+        # Check for database connection errors
+        error_msg = str(e).lower()
+        if 'connection' in error_msg or 'timeout' in error_msg:
+            return jsonify({
+                'status': 'error',
+                'error': {
+                    'type': 'DatabaseConnectionError',
+                    'message': 'Unable to connect to database. Please try again in a moment.',
+                    'error_code': 'DB_CONNECTION_FAILED',
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                }
+            }), 503
+
         return jsonify({
             'status': 'error',
             'error': {
                 'type': 'InternalError',
-                'message': f'Delete failed: {str(e)}',
+                'message': 'Delete operation failed due to an unexpected error. Please try again.',
+                'error_code': 'DELETE_FAILED',
                 'timestamp': datetime.utcnow().isoformat() + 'Z'
-            }
+            },
+            'help': 'If the problem persists, please contact support.'
         }), 500

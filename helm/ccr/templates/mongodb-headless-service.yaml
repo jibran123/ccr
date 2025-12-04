@@ -1,0 +1,19 @@
+{{- if .Values.mongodb.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ccr.mongodb.headlessServiceName" . }}
+  labels:
+    {{- include "ccr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mongodb
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - port: {{ .Values.mongodb.port }}
+      targetPort: mongodb
+      protocol: TCP
+      name: mongodb
+  selector:
+    {{- include "ccr.mongodb.selectorLabels" . | nindent 4 }}
+{{- end }}

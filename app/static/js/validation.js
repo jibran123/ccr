@@ -1,5 +1,5 @@
 /**
- * CCR API Manager - Frontend Validation Library
+ * Common Configuration Repository (CCR) - Frontend Validation Library
  * 
  * Provides input validation and sanitization for all user inputs.
  * Integrates with toast notification system for error display.

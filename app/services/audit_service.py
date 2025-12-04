@@ -1,5 +1,5 @@
 """
-Audit logging service for CCR API Manager.
+Audit logging service for Common Configuration Repository (CCR).
 
 Provides immutable audit trail for all API deployment changes.
 Tracks who made changes, what changed, and when for compliance and debugging.

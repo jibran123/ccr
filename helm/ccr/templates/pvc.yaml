@@ -1,0 +1,17 @@
+{{- if .Values.persistence.backup.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "ccr.backup.pvcName" . }}
+  labels:
+    {{- include "ccr.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.persistence.backup.accessMode }}
+  {{- if .Values.persistence.backup.storageClass }}
+  storageClassName: {{ .Values.persistence.backup.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.backup.size }}
+{{- end }}

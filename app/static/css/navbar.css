@@ -1,0 +1,479 @@
+/*
+Navigation Bar Styles for Common Configuration Repository (CCR)
+================================================================
+Modern top navigation bar with tabs for current and future modules
+*/
+
+.main-navbar {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 1rem 0;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+
+.navbar-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.3) transparent;
+    box-sizing: border-box;
+}
+
+.navbar-container::-webkit-scrollbar {
+    height: 6px;
+}
+
+.navbar-container::-webkit-scrollbar-track {
+    background: rgba(0,0,0,0.1);
+}
+
+.navbar-container::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.3);
+    border-radius: 3px;
+}
+
+.navbar-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,255,255,0.5);
+}
+
+/* Brand Section */
+.navbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-right: 2rem;
+    flex-shrink: 0;
+}
+
+.navbar-brand .app-logo {
+    width: 40px;
+    height: 40px;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+    transition: transform 0.3s ease;
+}
+
+.navbar-brand .app-logo:hover {
+    transform: scale(1.1) rotate(5deg);
+}
+
+.navbar-brand .app-title {
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin: 0;
+    color: white;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.3),
+                 0 0 20px rgba(255,255,255,0.2);
+    letter-spacing: 1px;
+}
+
+.navbar-brand .app-subtitle {
+    font-size: 0.9rem;
+    font-weight: 400;
+    color: rgba(255,255,255,0.85);
+}
+
+/* Navigation Tabs */
+.navbar-tabs {
+    display: flex;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    flex: 1;
+    gap: 0.5rem;
+    flex-wrap: nowrap;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.3) transparent;
+}
+
+.navbar-tabs::-webkit-scrollbar {
+    height: 6px;
+}
+
+.navbar-tabs::-webkit-scrollbar-track {
+    background: rgba(0,0,0,0.1);
+}
+
+.navbar-tabs::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.3);
+    border-radius: 3px;
+}
+
+.navbar-tabs::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,255,255,0.5);
+}
+
+.navbar-tabs-right {
+    display: flex;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    flex: 0 0 auto;
+    margin-left: 1rem;
+    flex-shrink: 0;
+    gap: 0.5rem;
+}
+
+.nav-tab {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.nav-tab a,
+.nav-tab button {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    color: white;
+    text-decoration: none;
+    border-radius: 10px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    font-size: 0.95rem;
+    font-weight: 600;
+    white-space: nowrap;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.15);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1),
+                0 1px 3px rgba(0,0,0,0.08),
+                inset 0 1px 0 rgba(255,255,255,0.1);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    position: relative;
+    overflow: hidden;
+}
+
+/* 3D Shine Effect */
+.nav-tab a::before,
+.nav-tab button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg,
+        transparent,
+        rgba(255,255,255,0.2),
+        transparent);
+    transition: left 0.5s ease;
+}
+
+.nav-tab a:hover::before,
+.nav-tab button:hover::before {
+    left: 100%;
+}
+
+.nav-tab a:hover,
+.nav-tab button:hover {
+    background: rgba(255,255,255,0.25);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.15),
+                0 3px 6px rgba(0,0,0,0.1),
+                inset 0 1px 0 rgba(255,255,255,0.2);
+    border-color: rgba(255,255,255,0.3);
+}
+
+.nav-tab a:active,
+.nav-tab button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1),
+                inset 0 1px 0 rgba(255,255,255,0.1);
+}
+
+.nav-tab.active a {
+    background: linear-gradient(135deg,
+        rgba(255,255,255,0.3) 0%,
+        rgba(255,255,255,0.2) 100%);
+    color: white;
+    font-weight: 700;
+    border-color: rgba(255,255,255,0.4);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.2),
+                0 3px 8px rgba(0,0,0,0.12),
+                inset 0 1px 0 rgba(255,255,255,0.3),
+                inset 0 -3px 0 0 rgba(255,215,0,0.6);
+}
+
+.nav-tab.active a::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg,
+        rgba(255,215,0,0.8),
+        rgba(255,255,255,0.8),
+        rgba(255,215,0,0.8));
+    box-shadow: 0 0 10px rgba(255,215,0,0.5);
+}
+
+/* Disabled/Coming Soon Tabs */
+.nav-tab.disabled a {
+    cursor: not-allowed;
+    opacity: 0.5;
+    background: rgba(255,255,255,0.05);
+    border-color: rgba(255,255,255,0.1);
+}
+
+.nav-tab.disabled a:hover {
+    background: rgba(255,255,255,0.08);
+    transform: none;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.nav-tab.disabled a:hover::before {
+    left: -100%;
+}
+
+/* Tab Icons */
+.tab-icon {
+    font-size: 1.3rem;
+    display: inline-block;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+    transition: transform 0.3s ease;
+}
+
+.nav-tab a:hover .tab-icon {
+    transform: scale(1.1) rotate(5deg);
+}
+
+.nav-tab.active a .tab-icon {
+    transform: scale(1.15);
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+}
+
+.tab-label {
+    font-size: 1rem;
+    letter-spacing: 0.3px;
+}
+
+/* Coming Soon Badge */
+.nav-tab .badge {
+    background: #ffa726;
+    color: white;
+    padding: 0.15rem 0.5rem;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-left: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Navbar Actions (right side) */
+.navbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-left: auto;
+}
+
+.app-version {
+    font-size: 0.85rem;
+    color: rgba(255,255,255,0.7);
+    padding: 0.25rem 0.75rem;
+    background: rgba(255,255,255,0.1);
+    border-radius: 12px;
+    font-family: 'Courier New', monospace;
+}
+
+/* Responsive Design */
+@media (max-width: 1400px) {
+    .nav-tab a,
+    .nav-tab button {
+        padding: 0.65rem 0.9rem;
+        font-size: 0.9rem;
+    }
+
+    .tab-label {
+        font-size: 0.9rem;
+    }
+
+    .tab-icon {
+        font-size: 1.2rem;
+    }
+}
+
+@media (max-width: 1200px) {
+    .navbar-brand .app-title {
+        font-size: 1.3rem;
+    }
+
+    .nav-tab a,
+    .nav-tab button {
+        padding: 0.6rem 0.8rem;
+        font-size: 0.85rem;
+    }
+
+    .tab-icon {
+        font-size: 1.1rem;
+    }
+}
+
+@media (max-width: 992px) {
+    .navbar-brand .app-subtitle {
+        display: none;
+    }
+
+    .tab-label {
+        font-size: 0.85rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .main-navbar {
+        flex-wrap: wrap;
+        padding: 0.75rem 1rem;
+    }
+
+    .navbar-brand {
+        flex: 1 0 100%;
+        margin-bottom: 0.75rem;
+        margin-right: 0;
+        justify-content: space-between;
+    }
+
+    .navbar-brand .app-title {
+        font-size: 1.1rem;
+    }
+
+    .navbar-tabs {
+        flex: 1 0 100%;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255,255,255,0.3) transparent;
+    }
+
+    .navbar-tabs::-webkit-scrollbar {
+        height: 4px;
+    }
+
+    .navbar-tabs::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .navbar-tabs::-webkit-scrollbar-thumb {
+        background: rgba(255,255,255,0.3);
+        border-radius: 2px;
+    }
+
+    .nav-tab a {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.8rem;
+    }
+
+    .tab-icon {
+        font-size: 1rem;
+    }
+
+    .navbar-actions {
+        position: absolute;
+        top: 0.75rem;
+        right: 1rem;
+    }
+
+    .app-version {
+        font-size: 0.75rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .tab-label {
+        display: none;
+    }
+
+    .nav-tab a {
+        padding: 0.5rem;
+    }
+
+    .nav-tab .badge {
+        display: none;
+    }
+}
+
+/* Tooltips for disabled tabs */
+.nav-tab.disabled a[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: -2.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.9);
+    color: white;
+    padding: 0.5rem 0.75rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    z-index: 1001;
+    pointer-events: none;
+}
+
+.nav-tab.disabled a[title]:hover::before {
+    content: '';
+    position: absolute;
+    bottom: -0.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-bottom-color: rgba(0,0,0,0.9);
+    z-index: 1001;
+    pointer-events: none;
+}
+
+/* Animation for active tab */
+.nav-tab.active a {
+    animation: tabActivate 0.3s ease;
+}
+
+@keyframes tabActivate {
+    from {
+        transform: scale(0.95);
+    }
+    to {
+        transform: scale(1);
+    }
+}
+
+/* Ensure main content doesn't overlap with sticky navbar */
+.main-content {
+    margin-top: 0;
+    padding-top: 2rem;
+}
+
+/* Theme Toggle Button */
+.theme-toggle-container {
+    flex-shrink: 0;
+}
+
+.theme-toggle {
+    cursor: pointer;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: white;
+    padding: 0.75rem 1rem;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.theme-toggle:hover {
+    cursor: pointer;
+}
+
+.theme-toggle i {
+    font-size: 1.3rem;
+}

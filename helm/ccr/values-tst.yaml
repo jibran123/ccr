@@ -1,0 +1,112 @@
+# Test environment values
+# Override default values for test environment
+
+global:
+  environment: tst
+
+image:
+  registry: harbor.yourcompany.com
+  repository: ccr/ccr
+  tag: ""  # Must be provided by CI/CD pipeline
+  pullPolicy: IfNotPresent
+
+flask:
+  # 2 replicas for test (similar to production)
+  replicaCount: 2
+
+  env:
+    flaskEnv: production
+    authEnabled: "true"  # Enable auth for testing
+    ratelimitEnabled: "true"  # Enable rate limiting
+    authLockoutEnabled: "true"  # Enable lockout
+    backupEnabled: "true"  # Test backup functionality
+    backupRetentionDays: "7"
+
+  # Production-like resources
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+  livenessProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    failureThreshold: 3
+
+  readinessProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    failureThreshold: 3
+
+mongodb:
+  enabled: true
+  persistence:
+    enabled: true
+    size: 10Gi
+
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+service:
+  type: ClusterIP  # Use ingress for external access
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-staging"  # Use staging certs in test
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+  hosts:
+    - host: ccr-tst.yourcompany.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: ccr-tst-tls
+      hosts:
+        - ccr-tst.yourcompany.com
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+persistence:
+  backup:
+    enabled: true
+    size: 5Gi
+
+podAnnotations:
+  environment: test
+  deployed-by: "ci-cd"
+  backup-enabled: "true"
+
+# Prefer dedicated test nodes if available
+nodeSelector: {}
+  # environment: test
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - ccr
+          topologyKey: kubernetes.io/hostname

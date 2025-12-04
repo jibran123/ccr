@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Audit Logs - CCR API Manager{% endblock %}
+{% block title %}Audit Logs - Common Configuration Repository{% endblock %}
 
 {% block additional_css %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
@@ -319,6 +319,5 @@
 {% endblock %}
 
 {% block additional_js %}
-<script src="{{ url_for('static', filename='js/toast.js') }}"></script>
-<script src="{{ url_for('static', filename='js/audit.js') }}"></script>
+<script src="{{ url_for('static', filename='js/audit.js') }}?v=20251128-1"></script>
 {% endblock %}

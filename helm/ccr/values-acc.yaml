@@ -1,0 +1,121 @@
+# Acceptance environment values
+# Override default values for acceptance/staging environment
+
+global:
+  environment: acc
+
+image:
+  registry: harbor.yourcompany.com
+  repository: ccr/ccr
+  tag: ""  # Must be provided by CI/CD pipeline
+  pullPolicy: IfNotPresent
+
+flask:
+  # 2 replicas for acceptance (production-like)
+  replicaCount: 2
+
+  env:
+    flaskEnv: production
+    authEnabled: "true"
+    ratelimitEnabled: "true"
+    authLockoutEnabled: "true"
+    backupEnabled: "true"
+    backupRetentionDays: "14"
+
+  # Production-like resources
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+  livenessProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    failureThreshold: 3
+
+  readinessProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    failureThreshold: 3
+
+mongodb:
+  enabled: true
+  persistence:
+    enabled: true
+    size: 10Gi
+
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+service:
+  type: ClusterIP
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"  # Production certs
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rate-limit: "100"  # Rate limit at ingress level
+  hosts:
+    - host: ccr-acc.yourcompany.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: ccr-acc-tls
+      hosts:
+        - ccr-acc.yourcompany.com
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+persistence:
+  backup:
+    enabled: true
+    size: 5Gi
+
+podAnnotations:
+  environment: acceptance
+  deployed-by: "ci-cd"
+  backup-enabled: "true"
+  monitoring-enabled: "true"
+
+# Prefer dedicated acceptance nodes
+nodeSelector: {}
+  # environment: acceptance
+
+tolerations: []
+
+# Strong anti-affinity for high availability
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+                - ccr
+        topologyKey: kubernetes.io/hostname
+
+monitoring:
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    path: /health/metrics
+    labels:
+      prometheus: enabled

@@ -1,5 +1,5 @@
 """
-Authentication Lockout Service for CCR API Manager.
+Authentication Lockout Service for Common Configuration Repository (CCR).
 
 Provides brute force protection by tracking failed authentication attempts
 and temporarily locking out IPs that exceed the failure threshold.

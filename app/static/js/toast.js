@@ -54,12 +54,13 @@ function initToastContainer() {
  * @param {string} options.title - Optional title (defaults based on type)
  * @param {number} options.duration - Duration in ms (0 = no auto-dismiss)
  * @param {boolean} options.dismissible - Whether user can dismiss (default: true)
+ * @param {object} options.action - Optional action button {text: string, callback: function}
  * @returns {object} Toast object with dismiss() method
  */
 function showToast(message, type = 'info', options = {}) {
     // Get or create container
     const container = initToastContainer();
-    
+
     // Remove oldest toast if we've hit the limit
     if (activeToasts.length >= TOAST_CONFIG.maxToasts) {
         const oldestToast = activeToasts[0];
@@ -67,16 +68,17 @@ function showToast(message, type = 'info', options = {}) {
             oldestToast.dismiss();
         }
     }
-    
+
     // Default options
     const defaults = {
         title: getDefaultTitle(type),
         duration: TOAST_CONFIG.defaultDuration,
-        dismissible: true
+        dismissible: true,
+        action: null
     };
-    
+
     const config = { ...defaults, ...options };
-    
+
     // Create toast element
     const toastId = `toast-${++toastCounter}`;
     const toast = document.createElement('div');
@@ -84,18 +86,19 @@ function showToast(message, type = 'info', options = {}) {
     toast.id = toastId;
     toast.setAttribute('role', 'alert');
     toast.setAttribute('aria-live', 'polite');
-    
+
     // Build toast HTML
     toast.innerHTML = `
         <div class="toast-icon">${getIcon(type)}</div>
         <div class="toast-content">
             ${config.title ? `<div class="toast-title">${escapeHtml(config.title)}</div>` : ''}
             <div class="toast-message">${escapeHtml(message)}</div>
+            ${config.action ? `<button class="toast-action-btn">${escapeHtml(config.action.text)}</button>` : ''}
         </div>
         ${config.dismissible ? '<div class="toast-close">×</div>' : ''}
         ${config.duration > 0 ? '<div class="toast-progress"></div>' : ''}
     `;
-    
+
     // Add to container
     container.appendChild(toast);
     
@@ -132,10 +135,27 @@ function showToast(message, type = 'info', options = {}) {
     
     // Add to active toasts
     activeToasts.push(toastObject);
-    
-    // Click to dismiss
+
+    // Setup action button if provided
+    if (config.action && config.action.callback) {
+        const actionBtn = toast.querySelector('.toast-action-btn');
+        if (actionBtn) {
+            actionBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Don't dismiss toast when clicking action
+                config.action.callback();
+                toastObject.dismiss();
+            });
+        }
+    }
+
+    // Click to dismiss (but not on action button)
     if (config.dismissible) {
-        toast.addEventListener('click', () => toastObject.dismiss());
+        toast.addEventListener('click', (e) => {
+            // Don't dismiss if clicking on action button
+            if (!e.target.classList.contains('toast-action-btn')) {
+                toastObject.dismiss();
+            }
+        });
     }
     
     // Auto-dismiss with progress bar

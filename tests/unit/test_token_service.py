@@ -137,7 +137,7 @@ class TestAccessTokenGeneration:
             assert decoded['role'] == role
             assert decoded['token_type'] == 'access'
             assert 'jti' in decoded
-            assert decoded['iss'] == 'ccr-api-manager'
+            assert decoded['iss'] == 'ccr'
 
     def test_generate_access_token_admin_role(self, app, token_service):
         """Test access token generation with admin role."""

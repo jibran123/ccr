@@ -1,0 +1,251 @@
+# Production environment values
+# Override default values for production environment
+
+global:
+  environment: prd
+
+image:
+  registry: harbor.yourcompany.com
+  repository: ccr/ccr
+  tag: ""  # MUST be provided by CI/CD pipeline (semantic version)
+  pullPolicy: IfNotPresent
+
+# Image pull secret for production Harbor
+imagePullSecrets:
+  - name: harbor-registry-secret
+
+flask:
+  # 3 replicas minimum for production HA
+  replicaCount: 3
+
+  env:
+    flaskEnv: production
+    authEnabled: "true"
+    ratelimitEnabled: "true"
+    authLockoutEnabled: "true"
+    backupEnabled: "true"
+    backupRetentionDays: "30"  # 30 days retention in production
+
+  # Production resources (higher limits)
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "200m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+
+  # Strict health checks
+  livenessProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  readinessProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  # Production security context
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+
+mongodb:
+  enabled: true
+  persistence:
+    enabled: true
+    storageClass: "premium-ssd"  # Use premium storage in production
+    size: 50Gi  # Larger storage for production
+
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "2000m"
+
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 999
+    fsGroup: 999
+
+service:
+  type: ClusterIP
+  sessionAffinity: ClientIP  # Maintain session affinity
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rate-limit: "200"
+    nginx.ingress.kubernetes.io/connection-proxy-header: "keep-alive"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+  hosts:
+    - host: ccr.yourcompany.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: ccr-prd-tls
+      hosts:
+        - ccr.yourcompany.com
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10  # Higher max for production
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 75  # More aggressive scaling
+
+persistence:
+  backup:
+    enabled: true
+    storageClass: "premium-ssd"
+    size: 20Gi  # Larger backup storage
+
+  logs:
+    enabled: false  # Use centralized logging in production
+
+podAnnotations:
+  environment: production
+  deployed-by: "ci-cd"
+  backup-enabled: "true"
+  monitoring-enabled: "true"
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "5000"
+  prometheus.io/path: "/health/metrics"
+
+podLabels:
+  tier: production
+  criticality: high
+
+# Dedicated production nodes
+nodeSelector:
+  environment: production
+  workload: api
+
+# Tolerate production node taints
+tolerations:
+  - key: "workload"
+    operator: "Equal"
+    value: "production"
+    effect: "NoSchedule"
+
+# Strong anti-affinity for maximum HA
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+                - ccr
+        topologyKey: kubernetes.io/hostname
+  # Prefer different availability zones
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - ccr
+          topologyKey: topology.kubernetes.io/zone
+
+# RBAC with minimal permissions
+serviceAccount:
+  create: true
+  name: ccr
+  annotations:
+    description: "Service account for Common Configuration Repository (CCR) production"
+
+rbac:
+  create: true
+
+# Network policies for production security
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            name: ingress-nginx
+      ports:
+      - protocol: TCP
+        port: 5000
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            name: monitoring
+      ports:
+      - protocol: TCP
+        port: 5000
+  egress:
+    - to:
+      - namespaceSelector:
+          matchLabels:
+            name: ccr
+      ports:
+      - protocol: TCP
+        port: 27017  # MongoDB
+    - to:
+      - namespaceSelector: {}
+      ports:
+      - protocol: TCP
+        port: 53  # DNS
+      - protocol: UDP
+        port: 53
+
+# Monitoring
+monitoring:
+  serviceMonitor:
+    enabled: true
+    interval: 15s  # More frequent in production
+    path: /health/metrics
+    labels:
+      prometheus: enabled
+      environment: production
+
+# Automated backups
+backup:
+  enabled: true
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+# External secrets (production uses Key Vault)
+externalSecrets:
+  enabled: true
+  backendType: azureKeyVault
+  vaultPath: "ccr-prod"
+  keys:
+    - secretKey
+    - jwtSecretKey
+    - jwtAdminKey

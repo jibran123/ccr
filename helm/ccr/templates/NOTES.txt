@@ -1,0 +1,146 @@
+******************************************************************
+***   Common Configuration Repository (CCR) has been deployed successfully!        ***
+******************************************************************
+
+Release Name:    {{ .Release.Name }}
+Namespace:       {{ .Release.Namespace }}
+Environment:     {{ include "ccr.environment" . }}
+Chart Version:   {{ .Chart.Version }}
+App Version:     {{ .Chart.AppVersion }}
+Image Tag:       {{ .Values.image.tag }}
+
+-------------------------------------------------------------------
+Access Information:
+-------------------------------------------------------------------
+
+{{- if .Values.ingress.enabled }}
+{{- range .Values.ingress.hosts }}
+  Application URL: {{ if $.Values.ingress.tls }}https{{ else }}http{{ end }}://{{ .host }}
+{{- end }}
+{{- else if eq .Values.service.type "LoadBalancer" }}
+  NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+
+  Get the application URL by running:
+    export SERVICE_IP=$(kubectl get svc {{ include "ccr.flask.serviceName" . }} -n {{ .Release.Namespace }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+    echo "http://$SERVICE_IP:{{ .Values.service.port }}"
+
+{{- else if eq .Values.service.type "NodePort" }}
+  Get the application URL by running:
+    export NODE_PORT=$(kubectl get svc {{ include "ccr.flask.serviceName" . }} -n {{ .Release.Namespace }} -o jsonpath='{.spec.ports[0].nodePort}')
+    export NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[0].address}')
+    echo "http://$NODE_IP:$NODE_PORT"
+
+{{- else if eq .Values.service.type "ClusterIP" }}
+  Application is only accessible from within the cluster.
+
+  To access it from your local machine, run:
+    kubectl port-forward svc/{{ include "ccr.flask.serviceName" . }} -n {{ .Release.Namespace }} 8080:{{ .Values.service.port }}
+
+  Then access at: http://localhost:8080
+{{- end }}
+
+-------------------------------------------------------------------
+Health Check Endpoints:
+-------------------------------------------------------------------
+
+  - Overall Health:     {{ if .Values.ingress.enabled }}{{ (index .Values.ingress.hosts 0).host }}{{ end }}/health
+  - Liveness Probe:     {{ if .Values.ingress.enabled }}{{ (index .Values.ingress.hosts 0).host }}{{ end }}/health/live
+  - Readiness Probe:    {{ if .Values.ingress.enabled }}{{ (index .Values.ingress.hosts 0).host }}{{ end }}/health/ready
+
+-------------------------------------------------------------------
+Deployed Resources:
+-------------------------------------------------------------------
+
+  Flask Deployment:    {{ include "ccr.fullname" . }}-flask
+  Flask Service:       {{ include "ccr.flask.serviceName" . }}
+{{- if .Values.mongodb.enabled }}
+  MongoDB StatefulSet: {{ include "ccr.mongodb.statefulsetName" . }}
+  MongoDB Service:     {{ include "ccr.mongodb.serviceName" . }}
+  MongoDB Headless:    {{ include "ccr.mongodb.headlessServiceName" . }}
+{{- end }}
+{{- if .Values.autoscaling.enabled }}
+  HPA:                 {{ include "ccr.fullname" . }}-flask ({{ .Values.autoscaling.minReplicas }}-{{ .Values.autoscaling.maxReplicas }} replicas)
+{{- end }}
+  ConfigMap:           {{ include "ccr.configMapName" . }}
+{{- if not .Values.externalSecrets.enabled }}
+  Secrets:             {{ include "ccr.secretName" . }}
+{{- end }}
+{{- if .Values.persistence.backup.enabled }}
+  Backup PVC:          {{ include "ccr.backup.pvcName" . }} ({{ .Values.persistence.backup.size }})
+{{- end }}
+
+-------------------------------------------------------------------
+Useful Commands:
+-------------------------------------------------------------------
+
+  # View all resources
+  kubectl get all -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }}
+
+  # Check pod status
+  kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/component=flask
+
+  # View Flask logs
+  kubectl logs -f -n {{ .Release.Namespace }} deployment/{{ include "ccr.fullname" . }}-flask
+
+{{- if .Values.mongodb.enabled }}
+  # View MongoDB logs
+  kubectl logs -f -n {{ .Release.Namespace }} {{ include "ccr.mongodb.statefulsetName" . }}-0
+{{- end }}
+
+  # Check HPA status
+{{- if .Values.autoscaling.enabled }}
+  kubectl get hpa -n {{ .Release.Namespace }} {{ include "ccr.fullname" . }}-flask
+{{- end }}
+
+  # Execute shell in Flask pod
+  kubectl exec -it -n {{ .Release.Namespace }} deployment/{{ include "ccr.fullname" . }}-flask -- /bin/bash
+
+  # View Helm release history
+  helm history {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+  # Rollback to previous version
+  helm rollback {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+-------------------------------------------------------------------
+Configuration:
+-------------------------------------------------------------------
+
+  Auth Enabled:          {{ .Values.flask.env.authEnabled }}
+  Rate Limiting:         {{ .Values.flask.env.ratelimitEnabled }}
+  Backup Enabled:        {{ .Values.flask.env.backupEnabled }}
+  Flask Environment:     {{ .Values.flask.env.flaskEnv }}
+
+{{- if eq .Values.flask.env.authEnabled "false" }}
+
+  ⚠️  WARNING: Authentication is DISABLED!
+      This should only be used in development environments.
+{{- end }}
+
+{{- if eq (include "ccr.environment" .) "prd" }}
+
+-------------------------------------------------------------------
+Production Checklist:
+-------------------------------------------------------------------
+
+  ✓ Ensure image tag is a semantic version (not 'latest')
+  ✓ Verify secrets are managed externally (Key Vault/Vault)
+  ✓ Confirm ingress TLS certificates are valid
+  ✓ Check resource limits are appropriate for load
+  ✓ Verify monitoring is enabled
+  ✓ Ensure backups are configured
+  ✓ Review network policies
+  ✓ Confirm node selectors for production nodes
+
+{{- end }}
+
+-------------------------------------------------------------------
+Need Help?
+-------------------------------------------------------------------
+
+  Documentation: https://github.com/yourcompany/ccr-deployment
+  Issues:        https://github.com/yourcompany/ccr-deployment/issues
+  Contact:       jibran@yourcompany.com
+
+******************************************************************
+***   Thank you for using Common Configuration Repository (CCR)!                    ***
+******************************************************************

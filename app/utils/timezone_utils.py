@@ -78,7 +78,7 @@ def local_to_utc(local_time: Union[datetime, str, None]) -> Optional[datetime]:
         return utc_dt
         
     except Exception as e:
-        print(f"Error converting local to UTC time: {e}")
+        logger.error(f"Error converting local to UTC time: {e}")
         return None
 
 def format_datetime(dt: Union[datetime, str, None], 
@@ -117,7 +117,7 @@ def format_datetime(dt: Union[datetime, str, None],
         return formatted
         
     except Exception as e:
-        print(f"Error formatting datetime: {e}")
+        logger.error(f"Error formatting datetime: {e}")
         return str(dt) if dt else 'N/A'
 
 def get_current_local_time() -> datetime:

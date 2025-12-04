@@ -1,0 +1,45 @@
+apiVersion: v2
+name: ccr
+description: A Helm chart for Common Configuration Repository (CCR) - Internal operations tool for managing API deployments
+type: application
+
+# Chart version - increment when you make changes to the chart
+version: 1.0.0
+
+# Application version - the version of the application being deployed
+appVersion: "2.0.0"
+
+# Maintainers
+maintainers:
+  - name: Jibran Patel
+    email: jibran@yourcompany.com
+
+# Keywords for searching
+keywords:
+  - ccr
+  - api-manager
+  - flask
+  - mongodb
+  - internal-tools
+
+# Home page
+home: https://github.com/yourcompany/ccr
+
+# Sources
+sources:
+  - https://github.com/yourcompany/ccr
+
+# Icon URL (optional)
+# icon: https://yourcompany.com/icons/ccr-logo.png
+
+# Dependencies (if any)
+# dependencies:
+#   - name: mongodb
+#     version: "13.x.x"
+#     repository: "https://charts.bitnami.com/bitnami"
+#     condition: mongodb.enabled
+
+# Annotations
+annotations:
+  category: InternalTools
+  licenses: Proprietary

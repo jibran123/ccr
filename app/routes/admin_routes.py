@@ -114,12 +114,68 @@ def create_backup():
             }
         }), 201
         
-    except Exception as e:
-        logger.error(f"Backup creation failed: {str(e)}", exc_info=True)
+    except PermissionError as e:
+        # Filesystem permission error
+        logger.error(f"Backup permission error: {str(e)}")
         return jsonify({
             'status': 'error',
-            'message': f'Backup failed: {str(e)}',
-            'error_code': 'BACKUP_FAILED'
+            'error': {
+                'type': 'PermissionError',
+                'message': 'Unable to create backup due to filesystem permissions.',
+                'error_code': 'BACKUP_PERMISSION_DENIED',
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            },
+            'help': 'Please contact support. The backup directory may not be writable.'
+        }), 500
+    except OSError as e:
+        # Disk space or other OS errors
+        logger.error(f"Backup OS error: {str(e)}")
+        error_msg = str(e).lower()
+        if 'space' in error_msg or 'disk' in error_msg:
+            return jsonify({
+                'status': 'error',
+                'error': {
+                    'type': 'DiskSpaceError',
+                    'message': 'Insufficient disk space to create backup.',
+                    'error_code': 'BACKUP_NO_SPACE',
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                },
+                'help': 'Please free up disk space or contact support.'
+            }), 507
+        return jsonify({
+            'status': 'error',
+            'error': {
+                'type': 'OSError',
+                'message': 'Filesystem error occurred while creating backup.',
+                'error_code': 'BACKUP_FILESYSTEM_ERROR',
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            }
+        }), 500
+    except Exception as e:
+        logger.error(f"Backup creation failed: {str(e)}", exc_info=True)
+
+        # Check for database connection errors
+        error_msg = str(e).lower()
+        if 'connection' in error_msg or 'timeout' in error_msg:
+            return jsonify({
+                'status': 'error',
+                'error': {
+                    'type': 'DatabaseConnectionError',
+                    'message': 'Unable to connect to database for backup. Please try again.',
+                    'error_code': 'DB_CONNECTION_FAILED',
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                }
+            }), 503
+
+        return jsonify({
+            'status': 'error',
+            'error': {
+                'type': 'BackupError',
+                'message': 'Backup creation failed due to an unexpected error.',
+                'error_code': 'BACKUP_FAILED',
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            },
+            'help': 'Please try again or contact support if the problem persists.'
         }), 500
 
 

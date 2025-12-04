@@ -1,5 +1,5 @@
 """
-Database service for CCR API Manager with MongoDB operations.
+Database service for Common Configuration Repository (CCR) with MongoDB operations.
 
 Enhanced with AND/OR logical operator support for attribute queries.
 Supports queries like:
@@ -13,6 +13,8 @@ from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 import logging
 import re
+from collections import Counter
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -137,11 +139,7 @@ class DatabaseService:
     def _is_attribute_search(self, query: str) -> bool:
         """Check if query is an attribute search (contains = or !=)."""
         return '=' in query and not self._is_properties_search(query)
-    
-    # ========================================
-    # NEW: LOGICAL OPERATOR SUPPORT (AND/OR)
-    # ========================================
-    
+
     def _parse_logical_query(self, query: str) -> Dict[str, Any]:
         """
         Parse query with AND/OR logical operators into conditions.
@@ -505,7 +503,119 @@ class DatabaseService:
             'total_apis': total_apis,
             'total_deployments': total_deployments
         }
-    
+
+    def get_dashboard_summary(self, date_filter: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Get dashboard summary statistics including distributions and recent activity.
+
+        Args:
+            date_filter: Optional MongoDB date filter (e.g., {'lastUpdated': {'$gte': date}})
+
+        Returns:
+            Dictionary with:
+                - summary: Total APIs, total deployments, active deployments, recent changes
+                - platform_distribution: Count by platform
+                - environment_distribution: Count by environment
+                - status_distribution: Count by status
+                - recent_activity: Last 10 audit log entries
+        """
+        # Build aggregation pipeline to flatten deployments
+        pipeline = [
+            {'$unwind': '$Platform'},
+            {'$unwind': '$Platform.Environment'}
+        ]
+
+        # Add date filter if provided
+        if date_filter:
+            # Apply filter on the Platform.Environment.lastUpdated field
+            filter_key = list(date_filter.keys())[0]  # Get 'lastUpdated'
+            filter_value = date_filter[filter_key]
+            pipeline.append({
+                '$match': {
+                    f'Platform.Environment.{filter_key}': filter_value
+                }
+            })
+
+        # Project to flatten structure
+        pipeline.append({
+            '$project': {
+                'api_name': '$API Name',
+                'platform': '$Platform.PlatformID',
+                'environment': '$Platform.Environment.environmentID',
+                'status': '$Platform.Environment.status',
+                'lastUpdated': '$Platform.Environment.lastUpdated'
+            }
+        })
+
+        # Execute aggregation
+        deployments = list(self.collection.aggregate(pipeline))
+
+        # Calculate summary statistics
+        total_apis = len(set(d['api_name'] for d in deployments))
+        total_deployments = len(deployments)
+        active_deployments = len([d for d in deployments if d['status'] == 'RUNNING'])
+
+        # Recent changes (last 7 days)
+        seven_days_ago = datetime.utcnow() - timedelta(days=7)
+        recent_changes = 0
+        for d in deployments:
+            last_updated = d.get('lastUpdated')
+            if last_updated:
+                # Handle both datetime objects and string dates
+                if isinstance(last_updated, str):
+                    try:
+                        last_updated = datetime.fromisoformat(last_updated.replace('Z', '+00:00'))
+                        # Make it timezone-naive for comparison
+                        if last_updated.tzinfo is not None:
+                            last_updated = last_updated.replace(tzinfo=None)
+                    except:
+                        continue
+                if isinstance(last_updated, datetime) and last_updated >= seven_days_ago:
+                    recent_changes += 1
+
+        # Calculate distributions using Counter
+        platform_dist = Counter(d['platform'] for d in deployments)
+        environment_dist = Counter(d['environment'] for d in deployments)
+        status_dist = Counter(d['status'] for d in deployments)
+
+        # Get recent activity from audit logs (last 10)
+        audit_collection = self.db['audit_logs']
+        recent_activity = list(
+            audit_collection.find(
+                {},
+                {
+                    '_id': 0,
+                    'timestamp': 1,
+                    'action': 1,
+                    'api_name': 1,
+                    'platform_id': 1,
+                    'environment_id': 1,
+                    'username': 1,
+                    'changes': 1
+                }
+            )
+            .sort('timestamp', -1)
+            .limit(10)
+        )
+
+        # Convert datetime objects to ISO format strings for JSON serialization
+        for activity in recent_activity:
+            if 'timestamp' in activity and isinstance(activity['timestamp'], datetime):
+                activity['timestamp'] = activity['timestamp'].isoformat() + 'Z'
+
+        return {
+            'summary': {
+                'total_apis': total_apis,
+                'total_deployments': total_deployments,
+                'active_deployments': active_deployments,
+                'recent_changes': recent_changes
+            },
+            'platform_distribution': dict(platform_dist),
+            'environment_distribution': dict(environment_dist),
+            'status_distribution': dict(status_dist),
+            'recent_activity': recent_activity
+        }
+
     def close(self):
         """Close database connection"""
         if self.client:

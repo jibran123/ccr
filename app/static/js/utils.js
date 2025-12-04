@@ -189,3 +189,196 @@ function updateQueryParams(params) {
     });
     window.history.pushState({}, '', url);
 }
+
+/**
+ * Enhanced error handler for API requests
+ * Provides user-friendly messages based on error type
+ * @param {Error|Response} error - The error object
+ * @param {string} context - Context of the operation (e.g., "search", "deploy")
+ * @returns {object} {message: string, action: string, canRetry: boolean}
+ */
+function handleApiError(error, context = "operation") {
+    console.error(`${context} error:`, error);
+
+    // Check if offline
+    if (!navigator.onLine) {
+        return {
+            message: 'No internet connection.',
+            action: 'Please check your network and try again.',
+            canRetry: true,
+            errorType: 'network'
+        };
+    }
+
+    // Handle fetch/network errors
+    if (error instanceof TypeError || error.name === 'NetworkError' || error.name === 'TypeError') {
+        return {
+            message: 'Unable to reach server.',
+            action: 'Please check your connection and try again.',
+            canRetry: true,
+            errorType: 'network'
+        };
+    }
+
+    // Handle timeout errors
+    if (error.name === 'TimeoutError' || (error.message && error.message.includes('timeout'))) {
+        return {
+            message: 'Request timed out.',
+            action: 'The server is taking too long to respond. Please try again.',
+            canRetry: true,
+            errorType: 'timeout'
+        };
+    }
+
+    // Handle response with error object
+    if (error.error) {
+        const apiError = error.error;
+
+        // Use API-provided message if available
+        if (apiError.message) {
+            return {
+                message: apiError.message,
+                action: error.help || 'Please try again.',
+                canRetry: apiError.error_code !== 'VALIDATION_ERROR',
+                errorType: apiError.type || 'api_error',
+                errorCode: apiError.error_code
+            };
+        }
+    }
+
+    // Handle HTTP status codes from response
+    if (error.status) {
+        switch (error.status) {
+            case 400:
+                return {
+                    message: error.message || 'Invalid request.',
+                    action: 'Please check your input and try again.',
+                    canRetry: false,
+                    errorType: 'validation'
+                };
+            case 401:
+                return {
+                    message: 'Authentication required.',
+                    action: 'Please log in and try again.',
+                    canRetry: false,
+                    errorType: 'auth'
+                };
+            case 403:
+                return {
+                    message: 'Access denied.',
+                    action: 'You don\'t have permission to perform this action.',
+                    canRetry: false,
+                    errorType: 'permission'
+                };
+            case 404:
+                return {
+                    message: 'Resource not found.',
+                    action: 'The requested item doesn\'t exist or has been deleted.',
+                    canRetry: false,
+                    errorType: 'not_found'
+                };
+            case 413:
+                return {
+                    message: 'Request too large.',
+                    action: 'Please try with less data or smaller file size.',
+                    canRetry: false,
+                    errorType: 'too_large'
+                };
+            case 429:
+                return {
+                    message: 'Too many requests.',
+                    action: 'Please wait a moment before trying again.',
+                    canRetry: true,
+                    errorType: 'rate_limit'
+                };
+            case 500:
+                return {
+                    message: 'Server error.',
+                    action: 'Please try again in a moment. Contact support if this persists.',
+                    canRetry: true,
+                    errorType: 'server_error'
+                };
+            case 503:
+                return {
+                    message: 'Service unavailable.',
+                    action: 'The server is temporarily down. Please try again shortly.',
+                    canRetry: true,
+                    errorType: 'service_unavailable'
+                };
+            case 507:
+                return {
+                    message: 'Insufficient storage.',
+                    action: 'Please contact support to free up space.',
+                    canRetry: false,
+                    errorType: 'storage_full'
+                };
+            default:
+                return {
+                    message: `Server responded with error code ${error.status}.`,
+                    action: 'Please try again or contact support.',
+                    canRetry: true,
+                    errorType: 'http_error'
+                };
+        }
+    }
+
+    // Generic error fallback
+    return {
+        message: `${context} failed.`,
+        action: 'Please try again. Contact support if the problem persists.',
+        canRetry: true,
+        errorType: 'unknown'
+    };
+}
+
+/**
+ * Display error using toast notification
+ * @param {Error|Response} error - The error object
+ * @param {string} context - Context of the operation
+ * @param {function} retryCallback - Optional callback to retry the operation
+ */
+function showApiError(error, context = "Operation", retryCallback = null) {
+    const errorInfo = handleApiError(error, context);
+    const fullMessage = `${errorInfo.message} ${errorInfo.action}`;
+
+    // Show toast with retry option if available
+    const toastOptions = { duration: 6000 };
+
+    if (errorInfo.canRetry && retryCallback) {
+        toastOptions.action = {
+            text: 'Retry',
+            callback: retryCallback
+        };
+    }
+
+    showToast(fullMessage, 'error', toastOptions);
+
+    return errorInfo;
+}
+
+/**
+ * Check if user is online
+ * @returns {boolean} True if online
+ */
+function isOnline() {
+    return navigator.onLine;
+}
+
+/**
+ * Setup offline/online detection
+ */
+function setupOfflineDetection() {
+    window.addEventListener('offline', () => {
+        showToast('You are offline. Some features may not work.', 'warning', { duration: 0 });
+    });
+
+    window.addEventListener('online', () => {
+        showToast('Connection restored.', 'success');
+    });
+}
+
+// Export functions to window object
+window.setupOfflineDetection = setupOfflineDetection;
+window.isOnline = isOnline;
+window.showApiError = showApiError;
+window.handleApiError = handleApiError;

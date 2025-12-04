@@ -65,7 +65,7 @@ def expired_token(test_app):
             'role': 'user',
             'iat': datetime.utcnow() - timedelta(hours=2),
             'exp': datetime.utcnow() - timedelta(hours=1),
-            'iss': 'ccr-api-manager'
+            'iss': 'ccr'
         }
 
         return jwt.encode(payload, secret_key, algorithm=algorithm)
@@ -142,7 +142,7 @@ class TestGenerateToken:
             assert 'iat' in decoded  # Issued at
             assert 'exp' in decoded  # Expiration
             assert 'iss' in decoded  # Issuer
-            assert decoded['iss'] == 'ccr-api-manager'
+            assert decoded['iss'] == 'ccr'
 
     def test_generate_token_error_handling(self, test_app):
         """Test token generation error handling."""
@@ -205,7 +205,7 @@ class TestValidateToken:
                 'role': 'user',
                 'iat': datetime.utcnow(),
                 'exp': datetime.utcnow() + timedelta(hours=1),
-                'iss': 'ccr-api-manager'
+                'iss': 'ccr'
             }
             token = jwt.encode(payload, wrong_secret, algorithm='HS256')
 
@@ -247,7 +247,7 @@ class TestValidateToken:
                 'jti': 'test-jti-123',
                 'iat': datetime.utcnow(),
                 'exp': datetime.utcnow() + timedelta(hours=1),
-                'iss': 'ccr-api-manager'
+                'iss': 'ccr'
             }
             token = jwt.encode(payload, secret_key, algorithm=algorithm)
 
@@ -275,7 +275,7 @@ class TestValidateToken:
                 'jti': 'test-jti-456',
                 'iat': datetime.utcnow(),
                 'exp': datetime.utcnow() + timedelta(hours=1),
-                'iss': 'ccr-api-manager'
+                'iss': 'ccr'
             }
             token = jwt.encode(payload, secret_key, algorithm=algorithm)
 
@@ -509,7 +509,7 @@ class TestEdgeCases:
                 'role': 'user',
                 'iat': datetime.utcnow() + timedelta(hours=1),
                 'exp': datetime.utcnow() + timedelta(hours=2),
-                'iss': 'ccr-api-manager'
+                'iss': 'ccr'
             }
             token = jwt.encode(payload, secret_key, algorithm=algorithm)
 

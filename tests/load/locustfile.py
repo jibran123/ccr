@@ -1,5 +1,5 @@
 """
-Locust Load Testing Script for CCR API Manager
+Locust Load Testing Script for Common Configuration Repository (CCR)
 Week 9-10: Phase 5 - Load Testing
 
 Usage:
@@ -24,7 +24,7 @@ import time
 
 class CCRAPIUser(HttpUser):
     """
-    Simulates a typical CCR API Manager user.
+    Simulates a typical Common Configuration Repository (CCR) user.
 
     Behaviors:
     - Search for APIs (most common)
@@ -165,7 +165,7 @@ class CCRAPIUser(HttpUser):
 def on_test_start(environment, **kwargs):
     """Called when the test starts."""
     print("\n" + "="*70)
-    print("CCR API Manager - Load Testing Started")
+    print("Common Configuration Repository (CCR) - Load Testing Started")
     print("="*70)
     print(f"Host: {environment.host}")
     print(f"Users: {environment.runner.target_user_count if hasattr(environment.runner, 'target_user_count') else 'N/A'}")
@@ -176,7 +176,7 @@ def on_test_start(environment, **kwargs):
 def on_test_stop(environment, **kwargs):
     """Called when the test stops."""
     print("\n" + "="*70)
-    print("CCR API Manager - Load Testing Complete")
+    print("Common Configuration Repository (CCR) - Load Testing Complete")
     print("="*70)
 
     # Print summary statistics

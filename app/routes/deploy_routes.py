@@ -157,13 +157,57 @@ def deploy_api():
                 }
             }), 500
             
+    except KeyError as e:
+        # Missing required field (should be caught by validation, but defensive)
+        logger.error(f"❌ Deployment missing field: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': {
+                'type': 'ValidationError',
+                'message': f'Missing required field: {str(e)}',
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            },
+            'help': {
+                'example': get_validation_example('deploy'),
+                'required_fields': ['api_name', 'platform_id', 'environment_id', 'status', 'updated_by']
+            }
+        }), 400
+    except ValueError as e:
+        # Invalid data type or value
+        logger.warning(f"Deployment value error: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': {
+                'type': 'ValidationError',
+                'message': f'Invalid value: {str(e)}',
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            },
+            'help': get_validation_example('deploy')
+        }), 400
     except Exception as e:
         logger.error(f"❌ Deployment error: {str(e)}", exc_info=True)
+
+        # Check if it's a database connection error
+        error_msg = str(e).lower()
+        if 'connection' in error_msg or 'timeout' in error_msg or 'network' in error_msg:
+            return jsonify({
+                'status': 'error',
+                'error': {
+                    'type': 'DatabaseConnectionError',
+                    'message': 'Unable to connect to database. Please try again in a moment.',
+                    'error_code': 'DB_CONNECTION_FAILED',
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
+                },
+                'help': 'If this problem persists, please contact support.'
+            }), 503
+
+        # Generic server error
         return jsonify({
             'status': 'error',
             'error': {
                 'type': 'InternalError',
-                'message': f'Deployment failed: {str(e)}',
+                'message': 'Deployment failed due to an unexpected error. Please try again.',
+                'error_code': 'DEPLOYMENT_FAILED',
                 'timestamp': datetime.utcnow().isoformat() + 'Z'
             },
             'help': 'Please check your request and try again. If the problem persists, contact support.'

@@ -5,7 +5,7 @@ class Config:
     """Application configuration."""
     
     # Application Configuration
-    APP_NAME = "CCR API Manager"
+    APP_NAME = "Common Configuration Repository (CCR)"
     APP_VERSION = "2.0.0"
     
     # Flask Configuration

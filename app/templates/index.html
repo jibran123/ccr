@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}API Search - CCR API Manager{% endblock %}
+{% block title %}API Registry - Common Configuration Repository{% endblock %}
 
 {% block additional_css %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
@@ -11,80 +11,6 @@
 <div class="search-section">
         <h2>API Search</h2>
 
-        <!-- Search Help & Examples (Collapsible) -->
-        <details class="search-help">
-            <summary>Search Help & Examples</summary>
-            <div class="help-content">
-                <h3>Search Syntax Guide</h3>
-
-                <div class="help-section">
-                    <h4>1. Simple Text Search</h4>
-                    <p>Search across API Name, Platform, and Environment with word boundaries (case insensitive).</p>
-                    <ul>
-                        <li><code>analytics</code> - Finds APIs with "analytics" in the name</li>
-                        <li><code>IP4</code> - Finds all IP4 platform deployments</li>
-                        <li><code>prod</code> - Finds all production environment deployments</li>
-                    </ul>
-                    <p class="note">💡 Tip: Simple search does NOT search inside Properties</p>
-                </div>
-
-                <div class="help-section">
-                    <h4>2. Attribute Search</h4>
-                    <p>Search specific fields with operators (case sensitive values).</p>
-                    <ul>
-                        <li><code>Platform = IP4</code> - Exact platform match</li>
-                        <li><code>Environment = prod</code> - Exact environment match</li>
-                        <li><code>Status = RUNNING</code> - Only running APIs</li>
-                        <li><code>Version >= 2.0</code> - Version 2.0 or higher</li>
-                    </ul>
-                    <p class="note">💡 Tip: Use exact case for values (IP4 not ip4)</p>
-                </div>
-
-                <div class="help-section">
-                    <h4>3. Properties Search</h4>
-                    <p>Search within the Properties object (case sensitive).</p>
-                    <ul>
-                        <li><code>Properties : env = production</code></li>
-                        <li><code>Properties : owner = team-alpha</code></li>
-                        <li><code>Properties : replicas >= 3</code></li>
-                    </ul>
-                    <p class="note">💡 Tip: Property keys and values are case-sensitive</p>
-                </div>
-
-                <div class="help-section">
-                    <h4>4. Logical Operations</h4>
-                    <p>Combine multiple conditions with AND/OR.</p>
-                    <ul>
-                        <li><code>Platform = IP4 AND Environment = prod</code></li>
-                        <li><code>Status = RUNNING OR Status = DEPLOYING</code></li>
-                        <li><code>Version >= 2.0 AND Platform = IP4</code></li>
-                    </ul>
-                </div>
-
-                <div class="help-section">
-                    <h4>5. Available Operators</h4>
-                    <ul>
-                        <li><code>=</code> - Exact match</li>
-                        <li><code>!=</code> - Not equal</li>
-                        <li><code>&gt;</code>, <code>&lt;</code>, <code>&gt;=</code>, <code>&lt;=</code> - Comparisons</li>
-                        <li><code>contains</code> - Partial match</li>
-                        <li><code>startswith</code> - Starts with</li>
-                        <li><code>endswith</code> - Ends with</li>
-                    </ul>
-                </div>
-
-                <div class="help-section">
-                    <h4>Quick Tips</h4>
-                    <ul>
-                        <li><strong>Simple text</strong>: Case insensitive, word boundaries</li>
-                        <li><strong>Attributes</strong>: Case sensitive values (IP4 ≠ ip4)</li>
-                        <li><strong>Properties</strong>: Case sensitive keys and values</li>
-                        <li><strong>Column Filters</strong>: Click filter icon (▼) in column headers to filter by specific values</li>
-                        <li>Leave search empty to show all deployments</li>
-                    </ul>
-                </div>
-            </div>
-        </details>
 
         <!-- Search Form -->
         <form id="searchForm">
@@ -96,6 +22,9 @@
                     class="search-input"
                     maxlength="500"
                 >
+                <button type="button" class="search-help-btn" id="searchHelpBtn" title="Search Help">
+                    <i class="fas fa-question-circle"></i>
+                </button>
                 <button type="submit" class="search-btn">SEARCH</button>
                 <button type="button" class="clear-btn" id="clearBtn">CLEAR ALL</button>
             </div>
@@ -205,11 +134,21 @@
                                 </div>
                             </div>
                         </th>
-                        <th>Version</th>
-                        <th>Deployment Date</th>
-                        <th>Last Updated</th>
-                        <th>Updated By</th>
-                        <th>Status</th>
+                        <th class="sortable" data-column="version">
+                            Version <span class="sort-icon"><i class="fas fa-sort"></i></span>
+                        </th>
+                        <th class="sortable" data-column="deploymentDate">
+                            Deployment Date <span class="sort-icon"><i class="fas fa-sort"></i></span>
+                        </th>
+                        <th class="sortable" data-column="lastUpdated">
+                            Last Updated <span class="sort-icon"><i class="fas fa-sort"></i></span>
+                        </th>
+                        <th class="sortable" data-column="updatedBy">
+                            Updated By <span class="sort-icon"><i class="fas fa-sort"></i></span>
+                        </th>
+                        <th class="sortable" data-column="status">
+                            Status <span class="sort-icon"><i class="fas fa-sort"></i></span>
+                        </th>
                         <th>Properties</th>
                     </tr>
                 </thead>
@@ -223,25 +162,337 @@
         <div id="pagination" class="pagination"></div>
     </div>
 
-<!-- Properties Modal -->
-<div id="propertiesModal" class="modal">
-    <div class="modal-content">
+<!-- API Details Drawer -->
+<div id="apiDetailsDrawer" class="api-drawer">
+    <!-- Overlay -->
+    <div class="drawer-overlay"></div>
+
+    <!-- Drawer Content -->
+    <div class="drawer-content">
+        <!-- Header -->
+        <div class="drawer-header">
+            <div class="drawer-title">
+                <i class="fas fa-info-circle"></i>
+                <h2>API Details</h2>
+            </div>
+            <button class="drawer-close" aria-label="Close drawer">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="drawer-tabs">
+            <button class="drawer-tab active" data-tab="overview">
+                <i class="fas fa-chart-line"></i> Overview
+            </button>
+            <button class="drawer-tab" data-tab="properties">
+                <i class="fas fa-code"></i> Properties
+            </button>
+            <button class="drawer-tab" data-tab="related">
+                <i class="fas fa-link"></i> Related
+            </button>
+            <button class="drawer-tab" data-tab="history">
+                <i class="fas fa-history"></i> History
+            </button>
+        </div>
+
+        <!-- Body -->
+        <div class="drawer-body">
+            <!-- Overview Tab -->
+            <div id="tab-overview" class="drawer-tab-content active">
+                <div class="detail-section">
+                    <h3>Basic Information</h3>
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <label>API Name</label>
+                            <div class="detail-value">
+                                <span id="detail-api-name">-</span>
+                                <button class="copy-btn" onclick="window.copyApiName()" title="Copy API name">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="detail-item">
+                            <label>Platform</label>
+                            <div class="detail-value" id="detail-platform">
+                                <span class="badge badge-platform">-</span>
+                            </div>
+                        </div>
+
+                        <div class="detail-item">
+                            <label>Environment</label>
+                            <div class="detail-value" id="detail-environment">
+                                <span class="badge badge-environment">-</span>
+                            </div>
+                        </div>
+
+                        <div class="detail-item">
+                            <label>Version</label>
+                            <div class="detail-value" id="detail-version">-</div>
+                        </div>
+
+                        <div class="detail-item">
+                            <label>Status</label>
+                            <div class="detail-value" id="detail-status">
+                                <span class="badge badge-status-unknown">-</span>
+                            </div>
+                        </div>
+
+                        <div class="detail-item">
+                            <label>Last Updated</label>
+                            <div class="detail-value" id="detail-last-updated">-</div>
+                        </div>
+
+                        <div class="detail-item">
+                            <label>Updated By</label>
+                            <div class="detail-value" id="detail-updated-by">-</div>
+                        </div>
+
+                        <div class="detail-item">
+                            <label>Deployment Date</label>
+                            <div class="detail-value" id="detail-deployment-date">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="detail-section">
+                    <h3>Quick Actions</h3>
+                    <div class="action-buttons">
+                        <button class="action-btn" onclick="window.copyFullConfig()">
+                            <i class="fas fa-copy"></i> Copy Configuration
+                        </button>
+                        <button class="action-btn" onclick="window.exportAsJSON()">
+                            <i class="fas fa-download"></i> Export JSON
+                        </button>
+                        <button class="action-btn" onclick="window.viewInAudit()">
+                            <i class="fas fa-clipboard-list"></i> View Audit History
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Properties Tab -->
+            <div id="tab-properties" class="drawer-tab-content">
+                <div class="detail-section">
+                    <h3>Properties</h3>
+                    <div class="properties-header">
+                        <span class="property-count">0 properties</span>
+                        <button class="copy-btn" onclick="window.copyProperties()">
+                            <i class="fas fa-copy"></i> Copy
+                        </button>
+                    </div>
+                    <pre class="json-viewer"><code class="language-json">{}</code></pre>
+                </div>
+            </div>
+
+            <!-- Related Tab -->
+            <div id="tab-related" class="drawer-tab-content">
+                <div class="detail-section">
+                    <h3>Related Deployments</h3>
+                    <p class="section-description">Other deployments of this API across different platforms and environments</p>
+                    <div class="related-list">
+                        <!-- Related items will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- History Tab -->
+            <div id="tab-history" class="drawer-tab-content">
+                <div class="detail-section">
+                    <h3>Deployment History</h3>
+                    <p class="section-description">Recent changes to this API deployment from audit logs</p>
+                    <div class="history-timeline">
+                        <!-- History will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Search Help Modal -->
+<div id="searchHelpModal" class="modal search-help-modal">
+    <div class="modal-content modal-lg">
         <div class="modal-header">
-            <h2>API Properties</h2>
+            <h2><i class="fas fa-question-circle"></i> Search Help & Examples</h2>
             <span class="modal-close">&times;</span>
         </div>
-        <div class="modal-body" id="modalBody">
-            <!-- Properties content will be inserted here -->
+        <div class="modal-tabs">
+            <button class="tab-btn active" data-tab="simple">Simple Search</button>
+            <button class="tab-btn" data-tab="attribute">Attribute Search</button>
+            <button class="tab-btn" data-tab="properties">Properties Search</button>
+            <button class="tab-btn" data-tab="reference">Quick Reference</button>
+        </div>
+        <div class="modal-body">
+            <!-- Tab 1: Simple Search -->
+            <div class="tab-content active" id="tab-simple">
+                <h3>Simple Text Search</h3>
+                <p>Search across API Name, Platform, and Environment with word boundaries (case insensitive).</p>
+                <div class="examples-section">
+                    <h4>Examples (click to try):</h4>
+                    <div class="example-box" data-query="user-authentication">
+                        <span class="query">user-authentication</span>
+                        <span class="description">→ Find APIs with "user-authentication"</span>
+                    </div>
+                    <div class="example-box" data-query="IP4">
+                        <span class="query">IP4</span>
+                        <span class="description">→ Find all IP4 platform deployments</span>
+                    </div>
+                    <div class="example-box" data-query="prd">
+                        <span class="query">prd</span>
+                        <span class="description">→ Find all production deployments</span>
+                    </div>
+                    <div class="example-box" data-query="OpenShift">
+                        <span class="query">OpenShift</span>
+                        <span class="description">→ Find all OpenShift deployments</span>
+                    </div>
+                </div>
+                <div class="help-tip">Tip: Simple search does NOT search inside Properties</div>
+            </div>
+
+            <!-- Tab 2: Attribute Search -->
+            <div class="tab-content" id="tab-attribute">
+                <h3>Attribute Search</h3>
+                <p>Search specific fields with operators (case sensitive values).</p>
+                <div class="operator-section">
+                    <h4>Available Operators:</h4>
+                    <div class="operator-list">
+                        <span class="operator-item">=</span>
+                        <span class="operator-item">!=</span>
+                        <span class="operator-item">&gt;</span>
+                        <span class="operator-item">&lt;</span>
+                        <span class="operator-item">&gt;=</span>
+                        <span class="operator-item">&lt;=</span>
+                        <span class="operator-item">contains</span>
+                        <span class="operator-item">startswith</span>
+                        <span class="operator-item">endswith</span>
+                    </div>
+                </div>
+                <div class="examples-section">
+                    <h4>Examples (click to try):</h4>
+                    <div class="example-box" data-query="Platform = IP4">
+                        <span class="query">Platform = IP4</span>
+                        <span class="description">→ Exact platform match</span>
+                    </div>
+                    <div class="example-box" data-query="Environment = prd">
+                        <span class="query">Environment = prd</span>
+                        <span class="description">→ Production environment</span>
+                    </div>
+                    <div class="example-box" data-query="Status = RUNNING">
+                        <span class="query">Status = RUNNING</span>
+                        <span class="description">→ Only running APIs</span>
+                    </div>
+                    <div class="example-box" data-query="Version >= 2.0">
+                        <span class="query">Version >= 2.0</span>
+                        <span class="description">→ Version 2.0 or higher</span>
+                    </div>
+                    <div class="example-box" data-query="APIName contains user">
+                        <span class="query">APIName contains user</span>
+                        <span class="description">→ APIs with "user" in name</span>
+                    </div>
+                    <div class="example-box" data-query="Platform = IP4 AND Environment = prd">
+                        <span class="query">Platform = IP4 AND Environment = prd</span>
+                        <span class="description">→ Production deployments on IP4</span>
+                    </div>
+                </div>
+                <div class="help-tip">Tip: Use exact case for values (prd not PRD, IP4 not ip4)</div>
+            </div>
+
+            <!-- Tab 3: Properties Search -->
+            <div class="tab-content" id="tab-properties">
+                <h3>Properties Search (CMDB Fields)</h3>
+                <p>Search within custom Properties object (case sensitive).</p>
+                <p><strong>Syntax:</strong> <code>Properties : key = value</code></p>
+                <div class="examples-section">
+                    <h4>Examples (click to try):</h4>
+                    <div class="example-box" data-query="Properties : owner = team-platform">
+                        <span class="query">Properties : owner = team-platform</span>
+                        <span class="description">→ Find by owner</span>
+                    </div>
+                    <div class="example-box" data-query="Properties : project = customer-portal">
+                        <span class="query">Properties : project = customer-portal</span>
+                        <span class="description">→ Find by project</span>
+                    </div>
+                    <div class="example-box" data-query="Properties : cost_center = CC-1234">
+                        <span class="query">Properties : cost_center = CC-1234</span>
+                        <span class="description">→ Find by cost center</span>
+                    </div>
+                    <div class="example-box" data-query="Properties : replicas >= 3">
+                        <span class="query">Properties : replicas >= 3</span>
+                        <span class="description">→ APIs with 3+ replicas</span>
+                    </div>
+                </div>
+                <div class="help-tip">Tip: Property keys and values are case-sensitive</div>
+            </div>
+
+            <!-- Tab 4: Quick Reference -->
+            <div class="tab-content" id="tab-reference">
+                <h3>Quick Reference</h3>
+                <div class="reference-section">
+                    <h4>Logical Operations:</h4>
+                    <p><strong>AND</strong> → Both conditions must match<br>
+                       <strong>OR</strong> → Either condition must match</p>
+                    <div class="example-box" data-query="Platform = IP4 AND Environment = prd">
+                        <span class="query">Platform = IP4 AND Environment = prd</span>
+                    </div>
+                </div>
+                <div class="reference-section">
+                    <h4>Available Fields:</h4>
+                    <div class="field-list">
+                        <span class="field-tag">APIName</span>
+                        <span class="field-tag">Platform</span>
+                        <span class="field-tag">Environment</span>
+                        <span class="field-tag">Status</span>
+                        <span class="field-tag">Version</span>
+                        <span class="field-tag">UpdatedBy</span>
+                        <span class="field-tag">DeploymentDate</span>
+                        <span class="field-tag">LastUpdated</span>
+                    </div>
+                </div>
+                <div class="reference-section">
+                    <h4>Available Platforms:</h4>
+                    <div class="field-list">
+                        <span class="field-tag">IP2</span>
+                        <span class="field-tag">IP3</span>
+                        <span class="field-tag">IP4</span>
+                        <span class="field-tag">IP5</span>
+                        <span class="field-tag">IP6</span>
+                        <span class="field-tag">IP7</span>
+                        <span class="field-tag">OpenShift</span>
+                        <span class="field-tag">AWS</span>
+                        <span class="field-tag">Azure</span>
+                    </div>
+                </div>
+                <div class="reference-section">
+                    <h4>Available Environments:</h4>
+                    <div class="field-list">
+                        <span class="field-tag">dev</span>
+                        <span class="field-tag">tst</span>
+                        <span class="field-tag">acc</span>
+                        <span class="field-tag">prd</span>
+                    </div>
+                </div>
+                <div class="reference-section">
+                    <h4>Available Status:</h4>
+                    <div class="field-list">
+                        <span class="field-tag">RUNNING</span>
+                        <span class="field-tag">STOPPED</span>
+                        <span class="field-tag">DEPLOYING</span>
+                        <span class="field-tag">FAILED</span>
+                        <span class="field-tag">MAINTENANCE</span>
+                    </div>
+                </div>
+                <div class="help-tip">Tip: Click filter icon (▼) in column headers to filter by specific values. Works alongside search queries.</div>
+            </div>
         </div>
     </div>
 </div>
 {% endblock %}
 
 {% block additional_js %}
-<!-- Week 3-4 Step 2: Toast Notification System -->
-<!-- Week 3-4 Step 3: Validation Library (NEW) -->
-<!-- IMPORTANT: Load in order: toast.js → validation.js → search.js -->
-<script src="{{ url_for('static', filename='js/toast.js') }}"></script>
-<script src="{{ url_for('static', filename='js/validation.js') }}"></script>
-<script src="{{ url_for('static', filename='js/search.js') }}"></script>
+<!-- Load order: toast.js (base.html) → api-details.js (base.html) → validation.js → search.js -->
+<script src="{{ url_for('static', filename='js/validation.js') }}?v=20251128-1"></script>
+<script src="{{ url_for('static', filename='js/search.js') }}?v=20251202-7"></script>
 {% endblock %}

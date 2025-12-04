@@ -1,0 +1,56 @@
+{{- if .Values.mongodb.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "ccr.mongodb.statefulsetName" . }}
+  labels:
+    {{- include "ccr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mongodb
+spec:
+  serviceName: {{ include "ccr.mongodb.headlessServiceName" . }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "ccr.mongodb.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ccr.mongodb.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "ccr.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.mongodb.securityContext | nindent 8 }}
+      containers:
+      - name: mongodb
+        image: {{ include "ccr.mongodb.image" . }}
+        imagePullPolicy: {{ .Values.mongodb.image.pullPolicy }}
+        ports:
+        - name: mongodb
+          containerPort: {{ .Values.mongodb.port }}
+          protocol: TCP
+        resources:
+          {{- toYaml .Values.mongodb.resources | nindent 10 }}
+        volumeMounts:
+        - name: {{ include "ccr.mongodb.pvcName" . }}
+          mountPath: /data/db
+  {{- if .Values.mongodb.persistence.enabled }}
+  volumeClaimTemplates:
+  - metadata:
+      name: {{ include "ccr.mongodb.pvcName" . }}
+      labels:
+        {{- include "ccr.labels" . | nindent 8 }}
+    spec:
+      accessModes:
+        - {{ .Values.mongodb.persistence.accessMode }}
+      {{- if .Values.mongodb.persistence.storageClass }}
+      storageClassName: {{ .Values.mongodb.persistence.storageClass | quote }}
+      {{- end }}
+      resources:
+        requests:
+          storage: {{ .Values.mongodb.persistence.size }}
+  {{- end }}
+{{- end }}

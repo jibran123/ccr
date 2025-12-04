@@ -1,6 +1,6 @@
 # UPDATE API Guide
 
-Complete guide for updating API deployments in the CCR API Manager.
+Complete guide for updating API deployments in the Common Configuration Repository (CCR).
 
 ## 📋 Table of Contents
 

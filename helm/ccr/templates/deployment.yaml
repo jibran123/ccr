@@ -1,0 +1,172 @@
+{{- /* Validate required values */ -}}
+{{- include "ccr.validateValues" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ccr.fullname" . }}-flask
+  labels:
+    {{- include "ccr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: flask
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.flask.replicaCount }}
+  {{- end }}
+  strategy:
+    {{- toYaml .Values.strategy | nindent 4 }}
+  selector:
+    matchLabels:
+      {{- include "ccr.flask.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- if not .Values.externalSecrets.enabled }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "ccr.flask.selectorLabels" . | nindent 8 }}
+        {{- include "ccr.podLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "ccr.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.flask.securityContext | nindent 8 }}
+      containers:
+      - name: flask-app
+        image: {{ include "ccr.flask.image" . }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.flask.containerPort }}
+          protocol: TCP
+        env:
+        - name: FLASK_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ccr.configMapName" . }}
+              key: FLASK_ENV
+        - name: MONGO_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ccr.configMapName" . }}
+              key: MONGO_HOST
+        - name: MONGO_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ccr.configMapName" . }}
+              key: MONGO_PORT
+        - name: MONGO_DB
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ccr.configMapName" . }}
+              key: MONGO_DB
+        - name: MONGO_COLLECTION
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ccr.configMapName" . }}
+              key: MONGO_COLLECTION
+        - name: AUTH_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ccr.configMapName" . }}
+              key: AUTH_ENABLED
+        - name: RATELIMIT_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ccr.configMapName" . }}
+              key: RATELIMIT_ENABLED
+        - name: AUTH_LOCKOUT_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ccr.configMapName" . }}
+              key: AUTH_LOCKOUT_ENABLED
+        - name: BACKUP_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ccr.configMapName" . }}
+              key: BACKUP_ENABLED
+        - name: BACKUP_RETENTION_DAYS
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ccr.configMapName" . }}
+              key: BACKUP_RETENTION_DAYS
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ccr.secretName" . }}
+              key: SECRET_KEY
+        - name: JWT_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ccr.secretName" . }}
+              key: JWT_SECRET_KEY
+        - name: JWT_ADMIN_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ccr.secretName" . }}
+              key: JWT_ADMIN_KEY
+        {{- if .Values.flask.livenessProbe.enabled }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.flask.livenessProbe.httpGet.path }}
+            port: {{ .Values.flask.livenessProbe.httpGet.port }}
+          initialDelaySeconds: {{ .Values.flask.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.flask.livenessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.flask.livenessProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.flask.livenessProbe.failureThreshold }}
+        {{- end }}
+        {{- if .Values.flask.readinessProbe.enabled }}
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.flask.readinessProbe.httpGet.path }}
+            port: {{ .Values.flask.readinessProbe.httpGet.port }}
+          initialDelaySeconds: {{ .Values.flask.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.flask.readinessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.flask.readinessProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.flask.readinessProbe.failureThreshold }}
+        {{- end }}
+        resources:
+          {{- toYaml .Values.flask.resources | nindent 10 }}
+        volumeMounts:
+        {{- if .Values.persistence.logs.enabled }}
+        - name: logs
+          mountPath: {{ .Values.persistence.logs.mountPath }}
+        {{- end }}
+        {{- if .Values.persistence.backup.enabled }}
+        - name: backups
+          mountPath: {{ .Values.persistence.backup.mountPath }}
+        {{- end }}
+      volumes:
+      {{- if .Values.persistence.logs.enabled }}
+      - name: logs
+        {{- if .Values.persistence.logs.emptyDir }}
+        emptyDir: {}
+        {{- else }}
+        persistentVolumeClaim:
+          claimName: {{ include "ccr.fullname" . }}-logs
+        {{- end }}
+      {{- end }}
+      {{- if .Values.persistence.backup.enabled }}
+      - name: backups
+        persistentVolumeClaim:
+          claimName: {{ include "ccr.backup.pvcName" . }}
+      {{- end }}
+      {{- with .Values.flask.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.flask.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.flask.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      restartPolicy: Always

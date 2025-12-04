@@ -20,7 +20,7 @@ class TestHealthCheckEndpoint:
         data = response.get_json()
 
         assert data['status'] == 'healthy'
-        assert data['service'] == 'CCR API Manager'
+        assert data['service'] == 'Common Configuration Repository (CCR)'
         assert 'timestamp' in data
         assert data['database']['status'] == 'healthy'
         assert data['database']['message'] == 'Connected'
@@ -43,7 +43,7 @@ class TestHealthCheckEndpoint:
                 data = response.get_json()
 
                 assert data['status'] == 'unhealthy'
-                assert data['service'] == 'CCR API Manager'
+                assert data['service'] == 'Common Configuration Repository (CCR)'
                 assert data['database']['status'] == 'unhealthy'
                 assert 'Connection timeout' in data['database']['message']
 

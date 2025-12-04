@@ -1,0 +1,90 @@
+# Development environment values
+# Override default values for development environment
+
+global:
+  environment: dev
+
+image:
+  registry: harbor.yourcompany.com
+  repository: ccr/ccr
+  tag: "latest"  # Use latest in dev, override in CI/CD
+  pullPolicy: Always  # Always pull in dev to get latest changes
+
+flask:
+  # Single replica for dev (save resources)
+  replicaCount: 1
+
+  env:
+    flaskEnv: development  # Development mode
+    authEnabled: "false"   # Disable auth in dev for easier testing
+    ratelimitEnabled: "false"  # Disable rate limiting in dev
+    authLockoutEnabled: "false"  # Disable lockout in dev
+    backupEnabled: "false"  # Disable backups in dev
+    backupRetentionDays: "7"
+
+  # Lower resources for dev
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+  # More lenient probes for dev
+  livenessProbe:
+    initialDelaySeconds: 15
+    periodSeconds: 30
+    failureThreshold: 5
+
+  readinessProbe:
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    failureThreshold: 5
+
+mongodb:
+  enabled: true
+  persistence:
+    enabled: true
+    size: 5Gi  # Smaller storage for dev
+
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+service:
+  type: NodePort  # Easier access in dev
+  nodePort: 30500
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+  hosts:
+    - host: ccr-dev.yourcompany.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []  # No TLS in dev
+
+autoscaling:
+  enabled: false  # Disable autoscaling in dev
+
+persistence:
+  backup:
+    enabled: false  # No backup storage needed in dev
+    size: 1Gi
+
+podAnnotations:
+  environment: development
+  deployed-by: "ci-cd"
+
+# Allow pod scheduling on any node in dev
+nodeSelector: {}
+tolerations: []
+affinity: {}

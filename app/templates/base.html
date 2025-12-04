@@ -3,22 +3,84 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}CCR API Manager{% endblock %}</title>
-    
+    <title>{% block title %}Common Configuration Repository (CCR){% endblock %}</title>
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
     <!-- CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
-    
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v=1764775142">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar.css') }}?v=1764775142">
+
+    <!-- Load theme script FIRST to prevent flash of wrong theme -->
+    <script src="{{ url_for('static', filename='js/theme.js') }}?v=20251202-6"></script>
+
     {% block additional_css %}{% endblock %}
 </head>
 <body>
     <div class="page-wrapper">
-        <nav class="navbar">
-            <div class="navbar-brand">
-                <h1>CCR API Manager</h1>
-            </div>
-            <div class="navbar-menu">
-                <a href="/" class="navbar-item">APIs</a>
-                <a href="/audit" class="navbar-item">Audit</a>
+        <nav class="main-navbar">
+            <div class="navbar-container">
+                <div class="navbar-brand">
+                    <img src="{{ url_for('static', filename='img/ccr-logo.svg') }}" alt="CCR Logo" class="app-logo">
+                    <h1 class="app-title">CCR</h1>
+                </div>
+
+                <ul class="navbar-tabs">
+                <li class="nav-tab {% if active_tab == 'dashboard' %}active{% endif %}">
+                    <a href="/">
+                        <i class="fas fa-chart-line tab-icon"></i>
+                        <span class="tab-label">Dashboard</span>
+                    </a>
+                </li>
+                <li class="nav-tab {% if active_tab == 'apis' %}active{% endif %}">
+                    <a href="/apis">
+                        <i class="fas fa-database tab-icon"></i>
+                        <span class="tab-label">APIs</span>
+                    </a>
+                </li>
+                <li class="nav-tab {% if active_tab == 'mulesoft' %}active{% endif %} disabled">
+                    <a href="#" onclick="return false;" title="Coming Soon">
+                        <i class="fas fa-cube tab-icon"></i>
+                        <span class="tab-label">MuleSoft</span>
+                        <span class="badge">Soon</span>
+                    </a>
+                </li>
+                <li class="nav-tab {% if active_tab == 'sftp' %}active{% endif %} disabled">
+                    <a href="#" onclick="return false;" title="Coming Soon">
+                        <i class="fas fa-folder-open tab-icon"></i>
+                        <span class="tab-label">sFTP</span>
+                        <span class="badge">Soon</span>
+                    </a>
+                </li>
+                <li class="nav-tab {% if active_tab == 'rabbitmq' %}active{% endif %} disabled">
+                    <a href="#" onclick="return false;" title="Coming Soon">
+                        <i class="fas fa-exchange-alt tab-icon"></i>
+                        <span class="tab-label">RabbitMQ</span>
+                        <span class="badge">Soon</span>
+                    </a>
+                </li>
+            </ul>
+
+                <ul class="navbar-tabs navbar-tabs-right">
+                    <li class="nav-tab {% if active_tab == 'audit' %}active{% endif %}">
+                        <a href="/audit">
+                            <i class="fas fa-clipboard-list tab-icon"></i>
+                            <span class="tab-label">Audit</span>
+                        </a>
+                    </li>
+                    <li class="nav-tab theme-toggle-container">
+                        <button id="themeToggle" class="theme-toggle" aria-label="Toggle dark mode" title="Switch to dark mode">
+                            <i class="fas fa-moon"></i>
+                        </button>
+                    </li>
+                    <li class="nav-tab">
+                        <a href="/logout" title="Logout" onclick="return confirm('Are you sure you want to logout?');">
+                            <i class="fas fa-sign-out-alt tab-icon"></i>
+                            <span class="tab-label">Logout</span>
+                        </a>
+                    </li>
+                </ul>
             </div>
         </nav>
 
@@ -29,12 +91,14 @@
 
     <footer class="footer">
         <div class="container">
-            <p>&copy; 2024 CCR API Manager. All rights reserved.</p>
+            <p>&copy; 2024-2025 Common Configuration Repository (CCR). All rights reserved.</p>
         </div>
     </footer>
 
     <!-- JavaScript -->
-    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/toast.js') }}?v=20251202-2"></script>
+    <script src="{{ url_for('static', filename='js/utils.js') }}?v=20251202-2"></script>
+    <script src="{{ url_for('static', filename='js/api-details.js') }}?v=20251202-7"></script>
     {% block additional_js %}{% endblock %}
 </body>
 </html>

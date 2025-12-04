@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo "================================"
-echo "CCR API Manager - Rebuild Script"
+echo "Common Configuration Repository (CCR) - Rebuild Script"
 echo "================================"
 
 

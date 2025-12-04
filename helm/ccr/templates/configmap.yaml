@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ccr.configMapName" . }}
+  labels:
+    {{- include "ccr.labels" . | nindent 4 }}
+data:
+  FLASK_ENV: {{ .Values.flask.env.flaskEnv | quote }}
+  MONGO_HOST: {{ .Values.flask.env.mongoHost | quote }}
+  MONGO_PORT: {{ .Values.flask.env.mongoPort | quote }}
+  MONGO_DB: {{ .Values.flask.env.mongoDb | quote }}
+  MONGO_COLLECTION: {{ .Values.flask.env.mongoCollection | quote }}
+  AUTH_ENABLED: {{ .Values.flask.env.authEnabled | quote }}
+  RATELIMIT_ENABLED: {{ .Values.flask.env.ratelimitEnabled | quote }}
+  AUTH_LOCKOUT_ENABLED: {{ .Values.flask.env.authLockoutEnabled | quote }}
+  BACKUP_ENABLED: {{ .Values.flask.env.backupEnabled | quote }}
+  BACKUP_RETENTION_DAYS: {{ .Values.flask.env.backupRetentionDays | quote }}

@@ -136,4 +136,12 @@ app/*/*/__pycache__/
 tests/__pycache__/
 tests/*/__pycache__/
 
-*.md
+# Kubernetes secrets (NEVER commit these!)
+k8s/secrets.yaml
+
+# Allow markdown documentation
+!*.md
+!README.md
+!CLAUDE.md
+!K8S_*.md
+!WEEK_*.md

@@ -1,5 +1,5 @@
 """
-JWT Authentication utilities for CCR API Manager.
+JWT Authentication utilities for Common Configuration Repository (CCR).
 
 This module provides:
 - JWT token generation
@@ -61,7 +61,7 @@ def generate_token(username: str, role: str = 'user',
             'role': role,
             'iat': datetime.utcnow(),  # Issued at
             'exp': expiration,          # Expiration
-            'iss': 'ccr-api-manager'    # Issuer
+            'iss': 'ccr'    # Issuer
         }
         
         # Generate token

@@ -1,6 +1,7 @@
 """API routes for the application."""
 from flask import Blueprint, request, jsonify, current_app
 import logging
+from datetime import datetime
 from app.utils.auth import require_auth
 from app import limiter
 
@@ -72,11 +73,29 @@ def search():
             }
         })
         
+    except ValueError as e:
+        # User input errors (invalid query syntax, etc.)
+        logger.warning(f"Search validation error: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': {
+                'type': 'ValidationError',
+                'message': 'Invalid search query. Please check your syntax and try again.',
+                'details': str(e),
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            },
+            'help': 'See search examples in the help section at the top of the page'
+        }), 400
     except Exception as e:
         logger.error(f"Search error: {str(e)}", exc_info=True)
         return jsonify({
             'status': 'error',
-            'message': str(e)
+            'error': {
+                'type': 'SearchError',
+                'message': 'Unable to complete search. Please try again or contact support if the problem persists.',
+                'error_code': 'SEARCH_FAILED',
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            }
         }), 500
 
 @bp.route('/suggestions/<field>', methods=['GET'])
@@ -125,11 +144,27 @@ def get_suggestions(field):
             'data': sorted(suggestions)
         })
         
+    except ValueError as e:
+        # Invalid field name or parameters
+        logger.warning(f"Suggestions validation error: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': {
+                'type': 'ValidationError',
+                'message': f'Invalid field: {field}. Must be one of: Platform, Environment, Status, UpdatedBy, Version',
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            }
+        }), 400
     except Exception as e:
         logger.error(f"Suggestions error: {str(e)}", exc_info=True)
         return jsonify({
             'status': 'error',
-            'message': str(e)
+            'error': {
+                'type': 'SuggestionsError',
+                'message': 'Unable to load suggestions. Please try again.',
+                'error_code': 'SUGGESTIONS_FAILED',
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            }
         }), 500
 
 @bp.route('/stats', methods=['GET'])
@@ -144,10 +179,15 @@ def get_stats():
         })
         
     except Exception as e:
-        logger.error(f"Stats error: {str(e)}")
+        logger.error(f"Stats error: {str(e)}", exc_info=True)
         return jsonify({
             'status': 'error',
-            'message': str(e)
+            'error': {
+                'type': 'StatsError',
+                'message': 'Unable to load statistics. Please refresh the page and try again.',
+                'error_code': 'STATS_FAILED',
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            }
         }), 500
 
 @bp.route('/export', methods=['POST'])
@@ -211,9 +251,86 @@ def export_data():
                 'count': len(results)
             })
             
-    except Exception as e:
-        logger.error(f"Export error: {str(e)}")
+    except MemoryError as e:
+        # Data too large to export
+        logger.error(f"Export memory error: {str(e)}")
         return jsonify({
             'status': 'error',
-            'message': str(e)
+            'error': {
+                'type': 'ExportError',
+                'message': 'Export data is too large. Please narrow your search and try again.',
+                'error_code': 'EXPORT_TOO_LARGE',
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            },
+            'help': 'Try filtering your results or exporting in smaller batches'
+        }), 413
+    except Exception as e:
+        logger.error(f"Export error: {str(e)}", exc_info=True)
+        return jsonify({
+            'status': 'error',
+            'error': {
+                'type': 'ExportError',
+                'message': 'Unable to export data. Please try again or contact support.',
+                'error_code': 'EXPORT_FAILED',
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            }
+        }), 500
+
+@bp.route('/dashboard/summary', methods=['GET'])
+def get_dashboard_summary():
+    """
+    Get dashboard summary statistics.
+
+    Query Parameters:
+    - time_period: 'all', '30d', '7d' (default: 'all')
+
+    Returns:
+        JSON with summary stats, distributions, and recent activity
+    """
+    try:
+        time_period = request.args.get('time_period', 'all')
+
+        # Validate time_period parameter
+        valid_periods = ['all', '30d', '7d']
+        if time_period not in valid_periods:
+            return jsonify({
+                'status': 'error',
+                'message': f'Invalid time_period. Must be one of: {", ".join(valid_periods)}'
+            }), 400
+
+        # Build date filter based on time period
+        date_filter = None
+        if time_period == '30d':
+            from datetime import timedelta
+            thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+            date_filter = {'lastUpdated': {'$gte': thirty_days_ago}}
+        elif time_period == '7d':
+            from datetime import timedelta
+            seven_days_ago = datetime.utcnow() - timedelta(days=7)
+            date_filter = {'lastUpdated': {'$gte': seven_days_ago}}
+
+        # Get dashboard summary from database service
+        summary_data = current_app.db_service.get_dashboard_summary(date_filter)
+
+        logger.info(f"Dashboard summary generated: time_period={time_period}")
+
+        return jsonify({
+            'status': 'success',
+            'data': summary_data,
+            'metadata': {
+                'time_period': time_period,
+                'generated_at': datetime.utcnow().isoformat() + 'Z'
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Dashboard summary error: {str(e)}", exc_info=True)
+        return jsonify({
+            'status': 'error',
+            'error': {
+                'type': 'DashboardError',
+                'message': 'Unable to load dashboard data. Please refresh the page and try again.',
+                'error_code': 'DASHBOARD_FAILED',
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            }
         }), 500

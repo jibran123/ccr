@@ -1,0 +1,480 @@
+# Common Configuration Repository (CCR) - Deployment Pipeline
+# This pipeline runs in the DEPLOYMENT repository
+# Purpose: Deploy Helm charts to Kubernetes clusters across environments
+
+# NOTE: This file should be named .gitlab-ci.yml in your deployment repository
+# It's named deployment-gitlab-ci.yml here to distinguish from build pipeline
+
+stages:
+  - validate
+  - deploy-dev
+  - deploy-tst
+  - deploy-acc
+  - deploy-prd
+  - verify
+  - rollback
+
+variables:
+  # Helm Configuration
+  HELM_VERSION: "3.13.0"
+  HELM_CHART_PATH: "./helm/ccr"
+
+  # Harbor Registry
+  HARBOR_REGISTRY: "harbor.yourcompany.com"
+  HARBOR_PROJECT: "ccr"
+  IMAGE_NAME: "ccr"
+
+  # Kubernetes Namespaces
+  NAMESPACE_DEV: "ccr-dev"
+  NAMESPACE_TST: "ccr-tst"
+  NAMESPACE_ACC: "ccr-acc"
+  NAMESPACE_PRD: "ccr-prd"
+
+  # Deployment Configuration
+  RELEASE_NAME: "ccr"
+  HELM_TIMEOUT: "5m"
+
+# ============================================================
+# BEFORE SCRIPT: Setup Helm and kubectl
+# ============================================================
+
+.setup_tools: &setup_tools
+  before_script:
+    - echo "Installing kubectl..."
+    - curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    - chmod +x kubectl
+    - mv kubectl /usr/local/bin/
+    - kubectl version --client
+
+    - echo "Installing Helm..."
+    - curl -fsSL https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz -o helm.tar.gz
+    - tar -zxvf helm.tar.gz
+    - mv linux-amd64/helm /usr/local/bin/helm
+    - helm version
+
+    - echo "Setting up kubeconfig..."
+    - mkdir -p ~/.kube
+    - echo "${KUBECONFIG_CONTENT}" | base64 -d > ~/.kube/config
+    - chmod 600 ~/.kube/config
+
+    - echo "Logging into Harbor..."
+    - helm registry login ${HARBOR_REGISTRY} --username ${HARBOR_USERNAME} --password ${HARBOR_PASSWORD}
+
+# ============================================================
+# STAGE 1: VALIDATE
+# ============================================================
+
+validate:chart:
+  stage: validate
+  image: alpine/helm:${HELM_VERSION}
+  script:
+    - echo "Validating Helm chart syntax..."
+    - helm lint ${HELM_CHART_PATH}
+    - echo "Chart validation successful!"
+  only:
+    - branches
+    - merge_requests
+    - tags
+
+validate:manifests:dev:
+  stage: validate
+  image: alpine/helm:${HELM_VERSION}
+  <<: *setup_tools
+  script:
+    - echo "Rendering Helm templates for dev environment..."
+    - helm template ${RELEASE_NAME} ${HELM_CHART_PATH} \
+        --values ${HELM_CHART_PATH}/values-dev.yaml \
+        --set image.tag=${IMAGE_TAG} \
+        --namespace ${NAMESPACE_DEV} > rendered-manifests-dev.yaml
+
+    - echo "Validating rendered manifests against Kubernetes..."
+    - kubectl apply --dry-run=client -f rendered-manifests-dev.yaml
+
+    - echo "Dev manifests validation successful!"
+  artifacts:
+    paths:
+      - rendered-manifests-dev.yaml
+    expire_in: 1 week
+  only:
+    - branches
+    - merge_requests
+
+validate:manifests:prd:
+  stage: validate
+  image: alpine/helm:${HELM_VERSION}
+  <<: *setup_tools
+  script:
+    - echo "Rendering Helm templates for production environment..."
+    - helm template ${RELEASE_NAME} ${HELM_CHART_PATH} \
+        --values ${HELM_CHART_PATH}/values-prd.yaml \
+        --set image.tag=${IMAGE_TAG} \
+        --namespace ${NAMESPACE_PRD} > rendered-manifests-prd.yaml
+
+    - echo "Validating rendered manifests against Kubernetes..."
+    - kubectl apply --dry-run=client -f rendered-manifests-prd.yaml
+
+    - echo "Production manifests validation successful!"
+  artifacts:
+    paths:
+      - rendered-manifests-prd.yaml
+    expire_in: 1 week
+  only:
+    - main
+    - master
+    - tags
+
+# ============================================================
+# STAGE 2: DEPLOY TO DEV
+# ============================================================
+
+deploy:dev:
+  stage: deploy-dev
+  image: alpine/helm:${HELM_VERSION}
+  <<: *setup_tools
+  script:
+    - echo "Deploying to DEV environment..."
+    - echo "Image: ${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${IMAGE_NAME}:${IMAGE_TAG}"
+    - echo "Namespace: ${NAMESPACE_DEV}"
+
+    - |
+      helm upgrade --install ${RELEASE_NAME} ${HELM_CHART_PATH} \
+        --namespace ${NAMESPACE_DEV} \
+        --create-namespace \
+        --values ${HELM_CHART_PATH}/values-dev.yaml \
+        --set image.registry=${HARBOR_REGISTRY} \
+        --set image.repository=${HARBOR_PROJECT}/${IMAGE_NAME} \
+        --set image.tag=${IMAGE_TAG} \
+        --wait \
+        --timeout ${HELM_TIMEOUT} \
+        --atomic \
+        --cleanup-on-fail
+
+    - echo "Deployment to DEV successful!"
+    - echo "Release: ${RELEASE_NAME}"
+    - echo "Revision: $(helm list -n ${NAMESPACE_DEV} | grep ${RELEASE_NAME} | awk '{print $3}')"
+  environment:
+    name: dev
+    url: http://ccr-dev.yourcompany.com
+    on_stop: stop:dev
+  only:
+    - branches
+    - merge_requests
+  when: manual
+  dependencies:
+    - validate:chart
+    - validate:manifests:dev
+
+stop:dev:
+  stage: deploy-dev
+  image: alpine/helm:${HELM_VERSION}
+  <<: *setup_tools
+  script:
+    - echo "Uninstalling from DEV environment..."
+    - helm uninstall ${RELEASE_NAME} --namespace ${NAMESPACE_DEV} || true
+  environment:
+    name: dev
+    action: stop
+  only:
+    - branches
+  when: manual
+
+# ============================================================
+# STAGE 3: DEPLOY TO TST (Test)
+# ============================================================
+
+deploy:tst:
+  stage: deploy-tst
+  image: alpine/helm:${HELM_VERSION}
+  <<: *setup_tools
+  script:
+    - echo "Deploying to TST environment..."
+    - echo "Image: ${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${IMAGE_NAME}:${IMAGE_TAG}"
+    - echo "Namespace: ${NAMESPACE_TST}"
+
+    - |
+      helm upgrade --install ${RELEASE_NAME} ${HELM_CHART_PATH} \
+        --namespace ${NAMESPACE_TST} \
+        --create-namespace \
+        --values ${HELM_CHART_PATH}/values-tst.yaml \
+        --set image.registry=${HARBOR_REGISTRY} \
+        --set image.repository=${HARBOR_PROJECT}/${IMAGE_NAME} \
+        --set image.tag=${IMAGE_TAG} \
+        --wait \
+        --timeout ${HELM_TIMEOUT} \
+        --atomic \
+        --cleanup-on-fail
+
+    - echo "Deployment to TST successful!"
+  environment:
+    name: tst
+    url: https://ccr-tst.yourcompany.com
+  only:
+    - main
+    - master
+    - tags
+  when: manual
+  dependencies:
+    - validate:chart
+
+# ============================================================
+# STAGE 4: DEPLOY TO ACC (Acceptance/Staging)
+# ============================================================
+
+deploy:acc:
+  stage: deploy-acc
+  image: alpine/helm:${HELM_VERSION}
+  <<: *setup_tools
+  script:
+    - echo "Deploying to ACC environment..."
+    - echo "Image: ${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${IMAGE_NAME}:${IMAGE_TAG}"
+    - echo "Namespace: ${NAMESPACE_ACC}"
+
+    - |
+      helm upgrade --install ${RELEASE_NAME} ${HELM_CHART_PATH} \
+        --namespace ${NAMESPACE_ACC} \
+        --create-namespace \
+        --values ${HELM_CHART_PATH}/values-acc.yaml \
+        --set image.registry=${HARBOR_REGISTRY} \
+        --set image.repository=${HARBOR_PROJECT}/${IMAGE_NAME} \
+        --set image.tag=${IMAGE_TAG} \
+        --wait \
+        --timeout ${HELM_TIMEOUT} \
+        --atomic \
+        --cleanup-on-fail
+
+    - echo "Deployment to ACC successful!"
+  environment:
+    name: acc
+    url: https://ccr-acc.yourcompany.com
+  only:
+    - main
+    - master
+    - tags
+  when: manual
+  needs:
+    - deploy:tst
+
+# ============================================================
+# STAGE 5: DEPLOY TO PRD (Production)
+# ============================================================
+
+deploy:prd:
+  stage: deploy-prd
+  image: alpine/helm:${HELM_VERSION}
+  <<: *setup_tools
+  script:
+    - echo "Deploying to PRODUCTION environment..."
+    - echo "Image: ${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${IMAGE_NAME}:${IMAGE_TAG}"
+    - echo "Namespace: ${NAMESPACE_PRD}"
+
+    - echo "Pre-deployment checks..."
+    - |
+      # Verify image exists in Harbor
+      if ! curl -u ${HARBOR_USERNAME}:${HARBOR_PASSWORD} \
+           "https://${HARBOR_REGISTRY}/api/v2.0/projects/${HARBOR_PROJECT}/repositories/${IMAGE_NAME}/artifacts/${IMAGE_TAG}" \
+           > /dev/null 2>&1; then
+        echo "ERROR: Image ${IMAGE_TAG} not found in Harbor!"
+        exit 1
+      fi
+
+    - echo "Image verification successful. Proceeding with deployment..."
+
+    - |
+      helm upgrade --install ${RELEASE_NAME} ${HELM_CHART_PATH} \
+        --namespace ${NAMESPACE_PRD} \
+        --create-namespace \
+        --values ${HELM_CHART_PATH}/values-prd.yaml \
+        --set image.registry=${HARBOR_REGISTRY} \
+        --set image.repository=${HARBOR_PROJECT}/${IMAGE_NAME} \
+        --set image.tag=${IMAGE_TAG} \
+        --wait \
+        --timeout ${HELM_TIMEOUT} \
+        --atomic \
+        --cleanup-on-fail
+
+    - echo "✅ Deployment to PRODUCTION successful!"
+    - echo "Release: ${RELEASE_NAME}"
+    - echo "Revision: $(helm list -n ${NAMESPACE_PRD} | grep ${RELEASE_NAME} | awk '{print $3}')"
+
+    - echo "Saving deployment metadata..."
+    - |
+      cat > deployment-info.txt <<EOF
+      Deployment Timestamp: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+      Image Tag: ${IMAGE_TAG}
+      Git Commit: ${CI_COMMIT_SHA}
+      Git Branch: ${CI_COMMIT_BRANCH}
+      Deployed By: ${GITLAB_USER_LOGIN}
+      Pipeline URL: ${CI_PIPELINE_URL}
+      EOF
+    - cat deployment-info.txt
+
+  environment:
+    name: production
+    url: https://ccr.yourcompany.com
+
+  artifacts:
+    paths:
+      - deployment-info.txt
+    expire_in: 90 days
+
+  only:
+    - main
+    - master
+    - tags
+
+  when: manual
+
+  needs:
+    - deploy:acc
+    - validate:manifests:prd
+
+# ============================================================
+# STAGE 6: VERIFY DEPLOYMENT
+# ============================================================
+
+verify:dev:
+  stage: verify
+  image: curlimages/curl:latest
+  script:
+    - echo "Verifying DEV deployment..."
+    - sleep 30  # Wait for pods to stabilize
+    - curl -f http://ccr-dev.yourcompany.com/health || exit 1
+    - echo "✅ DEV health check passed!"
+  only:
+    - branches
+    - merge_requests
+  needs:
+    - deploy:dev
+  allow_failure: true
+
+verify:tst:
+  stage: verify
+  image: curlimages/curl:latest
+  script:
+    - echo "Verifying TST deployment..."
+    - sleep 30
+    - curl -f https://ccr-tst.yourcompany.com/health || exit 1
+    - echo "✅ TST health check passed!"
+  only:
+    - main
+    - master
+    - tags
+  needs:
+    - deploy:tst
+  allow_failure: true
+
+verify:prd:
+  stage: verify
+  image: curlimages/curl:latest
+  script:
+    - echo "Verifying PRODUCTION deployment..."
+    - sleep 30
+
+    - echo "Running smoke tests..."
+    - curl -f https://ccr.yourcompany.com/health || exit 1
+    - curl -f https://ccr.yourcompany.com/health/live || exit 1
+    - curl -f https://ccr.yourcompany.com/health/ready || exit 1
+
+    - echo "✅ All PRODUCTION health checks passed!"
+  only:
+    - main
+    - master
+    - tags
+  needs:
+    - deploy:prd
+
+# ============================================================
+# STAGE 7: ROLLBACK
+# ============================================================
+
+rollback:dev:
+  stage: rollback
+  image: alpine/helm:${HELM_VERSION}
+  <<: *setup_tools
+  script:
+    - echo "Rolling back DEV deployment..."
+    - helm rollback ${RELEASE_NAME} --namespace ${NAMESPACE_DEV}
+    - echo "✅ DEV rollback successful!"
+  environment:
+    name: dev
+  only:
+    - branches
+    - merge_requests
+  when: manual
+
+rollback:tst:
+  stage: rollback
+  image: alpine/helm:${HELM_VERSION}
+  <<: *setup_tools
+  script:
+    - echo "Rolling back TST deployment..."
+    - helm rollback ${RELEASE_NAME} --namespace ${NAMESPACE_TST}
+    - echo "✅ TST rollback successful!"
+  environment:
+    name: tst
+  only:
+    - main
+    - master
+    - tags
+  when: manual
+
+rollback:prd:
+  stage: rollback
+  image: alpine/helm:${HELM_VERSION}
+  <<: *setup_tools
+  script:
+    - echo "⚠️  ROLLING BACK PRODUCTION DEPLOYMENT..."
+    - helm rollback ${RELEASE_NAME} --namespace ${NAMESPACE_PRD}
+    - echo "✅ PRODUCTION rollback successful!"
+    - echo "Previous revision restored."
+  environment:
+    name: production
+  only:
+    - main
+    - master
+    - tags
+  when: manual
+
+# ============================================================
+# UTILITY JOBS
+# ============================================================
+
+helm:history:
+  stage: verify
+  image: alpine/helm:${HELM_VERSION}
+  <<: *setup_tools
+  script:
+    - echo "Helm Release History:"
+    - echo "===================="
+    - echo ""
+    - echo "DEV:"
+    - helm history ${RELEASE_NAME} -n ${NAMESPACE_DEV} || echo "No releases found"
+    - echo ""
+    - echo "TST:"
+    - helm history ${RELEASE_NAME} -n ${NAMESPACE_TST} || echo "No releases found"
+    - echo ""
+    - echo "ACC:"
+    - helm history ${RELEASE_NAME} -n ${NAMESPACE_ACC} || echo "No releases found"
+    - echo ""
+    - echo "PRD:"
+    - helm history ${RELEASE_NAME} -n ${NAMESPACE_PRD} || echo "No releases found"
+  only:
+    - main
+    - master
+    - tags
+  when: manual
+
+# ============================================================
+# WORKFLOW RULES
+# ============================================================
+
+workflow:
+  rules:
+    # Run for merge requests
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    # Run for main/master
+    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"'
+    # Run for tags
+    - if: '$CI_COMMIT_TAG'
+    # Run for feature branches (manual deployments to dev only)
+    - if: '$CI_COMMIT_BRANCH'

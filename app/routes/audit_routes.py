@@ -23,14 +23,11 @@ def get_audit_service():
 
 def is_admin_user() -> bool:
     """
-    Check if current user is admin.
-    For now, returns True (implement proper role check when AUTH_ENABLED=true)
+    Check if current user has admin role.
 
     Returns:
-        True if user is admin
+        bool: True if user is admin, False otherwise
     """
-    # TODO: Implement proper role checking when authentication is enabled
-    # For now, all users are considered admin in development
     if current_app.config.get('AUTH_ENABLED', False):
         try:
             user = get_current_user()

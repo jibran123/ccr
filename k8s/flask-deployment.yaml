@@ -1,0 +1,135 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flask-deployment
+  labels:
+    app: ccr
+    component: flask
+    version: v2.0.0
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ccr
+      component: flask
+  template:
+    metadata:
+      labels:
+        app: ccr
+        component: flask
+        version: v2.0.0
+    spec:
+      containers:
+      - name: flask-app
+        image: localhost/ccr-flask-app:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5000
+          name: http
+          protocol: TCP
+        env:
+        - name: FLASK_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: flask-config
+              key: FLASK_ENV
+        - name: MONGO_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: flask-config
+              key: MONGO_HOST
+        - name: MONGO_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: flask-config
+              key: MONGO_PORT
+        - name: MONGO_DB
+          valueFrom:
+            configMapKeyRef:
+              name: flask-config
+              key: MONGO_DB
+        - name: MONGO_COLLECTION
+          valueFrom:
+            configMapKeyRef:
+              name: flask-config
+              key: MONGO_COLLECTION
+        - name: BACKUP_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: flask-config
+              key: BACKUP_ENABLED
+        - name: BACKUP_RETENTION_DAYS
+          valueFrom:
+            configMapKeyRef:
+              name: flask-config
+              key: BACKUP_RETENTION_DAYS
+        - name: AUTH_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: flask-config
+              key: AUTH_ENABLED
+        - name: RATELIMIT_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: flask-config
+              key: RATELIMIT_ENABLED
+        - name: AUTH_LOCKOUT_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: flask-config
+              key: AUTH_LOCKOUT_ENABLED
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: flask-secrets
+              key: SECRET_KEY
+        - name: JWT_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: flask-secrets
+              key: JWT_SECRET_KEY
+        - name: JWT_ADMIN_KEY
+          valueFrom:
+            secretKeyRef:
+              name: flask-secrets
+              key: JWT_ADMIN_KEY
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: logs
+          mountPath: /app/logs
+        - name: backups
+          mountPath: /app/backups
+      volumes:
+      - name: logs
+        emptyDir: {}
+      - name: backups
+        persistentVolumeClaim:
+          claimName: backup-pvc
+      restartPolicy: Always

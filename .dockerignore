@@ -1,0 +1,85 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
+!README.md
+docs/
+WEEK_*.md
+CLAUDE.md
+
+# CI/CD
+.gitlab-ci.yml
+.github/
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# Kubernetes
+k8s/
+helm/
+*.yaml
+!requirements.yaml
+
+# Tests
+tests/
+.pytest_cache/
+coverage.xml
+test-results.xml
+*.log
+
+# Backups
+backups/
+*.bak
+*.backup
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Security
+.env
+.env.*
+*.key
+*.pem
+*.crt
+secrets/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/

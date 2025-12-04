@@ -48,6 +48,15 @@ def create_app(config_class=Config):
     # Load configuration from Config class into Flask app.config
     app.config.from_object(config_class)
 
+    # Configure session management
+    from datetime import timedelta
+    app.config['SESSION_PERMANENT'] = True
+    app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)  # 8-hour sessions
+    app.config['SESSION_COOKIE_SECURE'] = app.config.get('FORCE_HTTPS', False)  # Secure cookies if HTTPS
+    app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent JavaScript access to session cookie
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection
+    logger.info("✅ Session management configured (8-hour lifetime)")
+
     logger.info(f"Starting {app.config.get('APP_NAME')} v{app.config.get('APP_VERSION')}")
     logger.info(f"Authentication enabled: {app.config.get('AUTH_ENABLED')}")
     logger.info(f"Backup enabled: {app.config.get('BACKUP_ENABLED')}")
@@ -76,9 +85,9 @@ def create_app(config_class=Config):
         csp = {
             'default-src': "'self'",
             'script-src': ["'self'", "'unsafe-inline'"],  # Allow inline scripts for current implementation
-            'style-src': ["'self'", "'unsafe-inline'"],   # Allow inline styles for current implementation
+            'style-src': ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],   # Allow inline styles and FontAwesome CDN
             'img-src': ["'self'", "data:", "https:"],
-            'font-src': ["'self'", "data:"],
+            'font-src': ["'self'", "data:", "https://cdnjs.cloudflare.com"],  # Allow FontAwesome fonts
             'connect-src': ["'self'"],
             'frame-ancestors': "'none'",
             'base-uri': "'self'",

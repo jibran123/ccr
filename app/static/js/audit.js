@@ -141,13 +141,23 @@ async function loadRecentAuditLogs() {
         if (data.status === 'success') {
             currentAuditLogs = data.data.logs;
             displayAuditLogs(currentAuditLogs);
-            showToast('Loaded recent audit logs (last 24 hours)', 'success');
+            if (currentAuditLogs.length === 0) {
+                showToast('No audit logs found in the last 24 hours', 'info');
+            } else {
+                showToast(`Loaded ${currentAuditLogs.length} recent audit log(s)`, 'success');
+            }
         } else {
             showToast('Failed to load audit logs', 'error');
         }
     } catch (error) {
         console.error('Failed to load recent logs:', error);
-        showToast('Error loading audit logs', 'error');
+
+        // Use enhanced error handling with retry
+        if (window.showApiError) {
+            window.showApiError(error, 'Load audit logs', () => loadRecentAuditLogs());
+        } else {
+            showToast('Error loading audit logs', 'error');
+        }
     } finally {
         hideLoading();
     }
@@ -222,7 +232,13 @@ async function applyFilters() {
         }
     } catch (error) {
         console.error('Failed to apply filters:', error);
-        showToast('Error applying filters', 'error');
+
+        // Use enhanced error handling with retry
+        if (window.showApiError) {
+            window.showApiError(error, 'Apply filters', () => applyFilters());
+        } else {
+            showToast('Error applying filters', 'error');
+        }
     } finally {
         hideLoading();
     }
@@ -385,7 +401,13 @@ async function loadTimeline() {
         }
     } catch (error) {
         console.error('Failed to load timeline:', error);
-        showToast('Error loading timeline', 'error');
+
+        // Use enhanced error handling with retry
+        if (window.showApiError) {
+            window.showApiError(error, 'Load timeline', () => loadTimeline());
+        } else {
+            showToast('Error loading timeline', 'error');
+        }
     } finally {
         hideLoading();
     }
@@ -465,7 +487,13 @@ async function loadStatistics() {
         }
     } catch (error) {
         console.error('Failed to load statistics:', error);
-        showToast('Error loading statistics', 'error');
+
+        // Use enhanced error handling with retry
+        if (window.showApiError) {
+            window.showApiError(error, 'Load statistics', () => loadStatistics());
+        } else {
+            showToast('Error loading statistics', 'error');
+        }
     } finally {
         hideLoading();
     }
@@ -567,7 +595,13 @@ async function loadUserActivity() {
         }
     } catch (error) {
         console.error('Failed to load user activity:', error);
-        showToast('Error loading user activity', 'error');
+
+        // Use enhanced error handling with retry
+        if (window.showApiError) {
+            window.showApiError(error, 'Load user activity', () => loadUserActivity());
+        } else {
+            showToast('Error loading user activity', 'error');
+        }
     } finally {
         hideLoading();
     }
